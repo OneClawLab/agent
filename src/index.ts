@@ -1,4 +1,5 @@
-#!/usr/bin/env node
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { initCmd } from './commands/init.js';
 import { startCmd } from './commands/start.js';
@@ -7,6 +8,7 @@ import { statusCmd } from './commands/status.js';
 import { listCmd } from './commands/status.js';
 import { runCmd } from './commands/run.js';
 import { deliverCmd } from './commands/deliver.js';
+import { readFileSync } from 'node:fs';
 
 // Helper: wrap async action and handle errors uniformly
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -21,9 +23,13 @@ function wrapAction(fn: (...args: any[]) => Promise<void>) {
   };
 }
 
+// Read version from package.json
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const { version: pkgVersion } = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf8')) as { version: string };
+
 const program = new Command('agent')
   .description('Agent runtime and lifecycle management')
-  .version('0.1.0');
+  .version(`agent ${pkgVersion}`)
 
 // Exit with code 2 on unknown commands/options
 program.on('command:*', () => {

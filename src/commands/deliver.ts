@@ -1,7 +1,7 @@
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { loadConfig } from '../config.js';
-import { createLogger } from '../logger.js';
+import { createFireAndForgetLogger } from '../repo-utils/logger.js';
 import { deliverBatch } from '../runner/deliver.js';
 
 /**
@@ -59,7 +59,7 @@ export async function deliverCmd(opts: { thread?: string; consumer?: string }): 
   }
 
   // Set up logger if we have an agent dir
-  const logger = agentDir ? createLogger(agentDir) : null;
+  const logger = agentDir ? createFireAndForgetLogger(join(agentDir, 'logs'), 'agent') : null;
   logger?.info(`deliver: thread=${threadPath} consumer=${consumerName} maxAttempts=${maxAttempts}`);
 
   await deliverBatch(threadPath, consumerName, maxAttempts);

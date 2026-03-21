@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createLogger } from '../../src/logger.js';
+import { createFireAndForgetLogger } from '../../src/repo-utils/logger.js';
 
 let tmpDir: string;
 
@@ -19,7 +19,7 @@ const flush = () => new Promise((r) => setTimeout(r, 50));
 
 describe('createLogger', () => {
   it('creates logs directory and writes to agent.log', async () => {
-    const logger = createLogger(tmpDir);
+    const logger = createFireAndForgetLogger(join(tmpDir, 'logs'), 'agent');
     logger.info('hello world');
     await flush();
 
@@ -28,7 +28,7 @@ describe('createLogger', () => {
   });
 
   it('includes ISO timestamp in each log line', async () => {
-    const logger = createLogger(tmpDir);
+    const logger = createFireAndForgetLogger(join(tmpDir, 'logs'), 'agent');
     logger.info('timestamp test');
     await flush();
 
@@ -38,7 +38,7 @@ describe('createLogger', () => {
   });
 
   it('writes error level correctly', async () => {
-    const logger = createLogger(tmpDir);
+    const logger = createFireAndForgetLogger(join(tmpDir, 'logs'), 'agent');
     logger.error('something failed');
     await flush();
 
@@ -47,7 +47,7 @@ describe('createLogger', () => {
   });
 
   it('writes debug level correctly', async () => {
-    const logger = createLogger(tmpDir);
+    const logger = createFireAndForgetLogger(join(tmpDir, 'logs'), 'agent');
     logger.debug('debug info');
     await flush();
 
@@ -56,7 +56,7 @@ describe('createLogger', () => {
   });
 
   it('appends multiple log lines', async () => {
-    const logger = createLogger(tmpDir);
+    const logger = createFireAndForgetLogger(join(tmpDir, 'logs'), 'agent');
     logger.info('line one');
     logger.error('line two');
     logger.debug('line three');
@@ -76,7 +76,7 @@ describe('createLogger', () => {
     const existingContent = 'x\n'.repeat(10000);
     await writeFile(join(logsDir, 'agent.log'), existingContent, 'utf8');
 
-    const logger = createLogger(tmpDir);
+    const logger = createFireAndForgetLogger(join(tmpDir, 'logs'), 'agent');
     logger.info('trigger rotation');
     await flush();
 
@@ -101,7 +101,7 @@ describe('createLogger', () => {
     const existingContent = 'x\n'.repeat(10000);
     await writeFile(join(logsDir, 'agent.log'), existingContent, 'utf8');
 
-    const logger = createLogger(tmpDir);
+    const logger = createFireAndForgetLogger(join(tmpDir, 'logs'), 'agent');
     logger.info('rotation naming test');
     await flush();
 
@@ -119,7 +119,7 @@ describe('createLogger', () => {
     const existingContent = 'x\n'.repeat(9999);
     await writeFile(join(logsDir, 'agent.log'), existingContent, 'utf8');
 
-    const logger = createLogger(tmpDir);
+    const logger = createFireAndForgetLogger(join(tmpDir, 'logs'), 'agent');
     logger.info('no rotation yet');
     await flush();
 
@@ -137,7 +137,7 @@ describe('createLogger', () => {
     const logsDir = join(tmpDir, 'logs');
     await mkdir(logsDir, { recursive: true });
 
-    const logger = createLogger(tmpDir);
+    const logger = createFireAndForgetLogger(join(tmpDir, 'logs'), 'agent');
     logger.info('pre-existing dir');
     await flush();
 

@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { execCommand } from '../os-utils.js';
+import { execCommand } from '../repo-utils/os.js';
 import { loadConfig } from '../config.js';
-import { createLogger } from '../logger.js';
+import { createFireAndForgetLogger } from '../repo-utils/logger.js';
 
 /**
  * Resolve the agent directory path: ~/.theclaw/agents/<id>/
@@ -43,7 +43,7 @@ export async function startCmd(id: string): Promise<void> {
   ]);
 
   // Requirement 2.2: log startup
-  const logger = createLogger(dir);
+  const logger = createFireAndForgetLogger(join(dir, 'logs'), 'agent');
   logger.info(`Agent '${id}' started — inbox subscription registered on ${inboxPath}`);
 
   process.stdout.write(`Agent '${id}' started\n`);

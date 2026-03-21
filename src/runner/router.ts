@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { execCommand } from '../os-utils.js';
+import { execCommand } from '../repo-utils/os.js';
 import type { RoutingMode } from '../types.js';
 
 export type { RoutingMode };

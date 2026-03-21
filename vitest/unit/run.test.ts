@@ -56,7 +56,7 @@ afterEach(() => { stdoutSpy.mockRestore(); });
 
 // ── Import mocked modules ─────────────────────────────────────────────────────
 
-import { execCommand } from '../../src/os-utils.js';
+import { execCommand } from '../../src/repo-utils/os.js';
 import { consumeMessages } from '../../src/runner/inbox.js';
 import { routeMessage } from '../../src/runner/router.js';
 import { invokeLlm } from '../../src/runner/llm.js';

@@ -1,4 +1,4 @@
-import { execCommand } from '../os-utils.js';
+import { execCommand } from '../repo-utils/os.js';
 import type { ToolCall } from '../types.js';
 
 export interface LlmInvokeParams {

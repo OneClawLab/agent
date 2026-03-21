@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { execCommand } from '../os-utils.js';
+import { execCommand } from '../repo-utils/os.js';
 
 /**
  * Resolve the agent directory path: ~/.theclaw/agents/<id>/

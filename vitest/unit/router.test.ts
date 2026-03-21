@@ -9,7 +9,7 @@ vi.mock('../../src/os-utils.js', () => ({
   execCommand: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
 }));
 
-import { execCommand } from '../../src/os-utils.js';
+import { execCommand } from '../../src/repo-utils/os.js';
 const mockExecCommand = vi.mocked(execCommand);
 
 let tmpDir: string;

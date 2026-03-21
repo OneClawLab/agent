@@ -5,7 +5,7 @@ vi.mock('../../src/os-utils.js', () => ({
   execCommand: vi.fn(),
 }));
 
-import { execCommand } from '../../src/os-utils.js';
+import { execCommand } from '../../src/repo-utils/os.js';
 const mockExec = vi.mocked(execCommand);
 
 const THREAD = '/agents/bot/threads/peers/tg-user1';

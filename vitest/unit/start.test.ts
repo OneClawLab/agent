@@ -4,15 +4,15 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 // Mock execCommand so `thread subscribe` is never actually invoked
-vi.mock('../../src/os-utils.js', () => ({
+vi.mock('../../src/repo-utils/os.js', () => ({
   execCommand: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
 }));
 
-// Mock createLogger to capture log calls
+// Mock createFireAndForgetLogger to capture log calls
 const mockInfo = vi.fn();
 const mockError = vi.fn();
-vi.mock('../../src/logger.js', () => ({
-  createLogger: vi.fn(() => ({ info: mockInfo, error: mockError, debug: vi.fn() })),
+vi.mock('../../src/repo-utils/logger.js', () => ({
+  createFireAndForgetLogger: vi.fn(() => ({ info: mockInfo, error: mockError, debug: vi.fn(), warn: vi.fn(), close: vi.fn().mockResolvedValue(undefined) })),
 }));
 
 // Mock homedir so agent dirs land in a tmp directory
@@ -29,10 +29,10 @@ let stdoutSpy: ReturnType<typeof vi.spyOn>;
 beforeEach(() => { stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true); });
 afterEach(() => { stdoutSpy.mockRestore(); });
 
-import { execCommand } from '../../src/os-utils.js';
-import { createLogger } from '../../src/logger.js';
+import { execCommand } from '../../src/repo-utils/os.js';
+import { createFireAndForgetLogger } from '../../src/repo-utils/logger.js';
 const mockExecCommand = vi.mocked(execCommand);
-const mockCreateLogger = vi.mocked(createLogger);
+const mockCreateLogger = vi.mocked(createFireAndForgetLogger);
 
 // Import AFTER mocks are set up
 const { startCmd } = await import('../../src/commands/start.js');

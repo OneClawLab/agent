@@ -7,7 +7,7 @@ vi.mock('../../src/os-utils.js', () => ({
   execCommand: vi.fn(),
 }));
 
-import { execCommand } from '../../src/os-utils.js';
+import { execCommand } from '../../src/repo-utils/os.js';
 import { execXgwSend, execThreadPush } from '../../src/runner/deliver.js';
 import type { DeliveryEvent } from '../../src/runner/deliver.js';
 

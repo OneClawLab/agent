@@ -22,7 +22,7 @@ let stdoutSpy: ReturnType<typeof vi.spyOn>;
 beforeEach(() => { stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true); });
 afterEach(() => { stdoutSpy.mockRestore(); });
 
-import { execCommand } from '../../src/os-utils.js';
+import { execCommand } from '../../src/repo-utils/os.js';
 const mockExecCommand = vi.mocked(execCommand);
 
 const { stopCmd } = await import('../../src/commands/stop.js');

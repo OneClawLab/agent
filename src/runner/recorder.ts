@@ -1,4 +1,4 @@
-import { execCommand } from '../os-utils.js';
+import { execCommand } from '../repo-utils/os.js';
 import type { ReplyContext } from '../types.js';
 
 /**

@@ -5,7 +5,7 @@ import * as fc from 'fast-check';
 import { mkdtemp, readFile, readdir, rm, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createLogger } from '../../src/logger.js';
+import { createFireAndForgetLogger } from '../../src/repo-utils/logger.js';
 
 let tmpDir: string;
 
@@ -41,7 +41,7 @@ describe('Property 12: 日志轮换', () => {
             const existingContent = 'x\n'.repeat(lineCount);
             await writeFile(join(logsDir, 'agent.log'), existingContent, 'utf8');
 
-            const logger = createLogger(dir);
+            const logger = createFireAndForgetLogger(join(dir, 'logs'), 'agent');
             logger.info(message);
             await flush();
 

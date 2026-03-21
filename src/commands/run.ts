@@ -4,12 +4,12 @@ import { join, basename } from 'node:path';
 import { homedir } from 'node:os';
 import { loadConfig } from '../config.js';
 import { buildSystemPrompt } from '../identity.js';
-import { createLogger } from '../logger.js';
+import { createFireAndForgetLogger, type Logger } from '../repo-utils/logger.js';
 import { consumeMessages } from '../runner/inbox.js';
 import { routeMessage } from '../runner/router.js';
 import { invokeLlm, buildSessionFilePath } from '../runner/llm.js';
 import { pushMessage, pushReply, pushRecord } from '../runner/recorder.js';
-import { execCommand } from '../os-utils.js';
+import { execCommand } from '../repo-utils/os.js';
 import { withRetry } from '../errors.js';
 import type { ReplyContext } from '../types.js';
 
@@ -61,7 +61,7 @@ async function compressThreadMemory(
   threadId: string,
   provider: string,
   model: string,
-  logger: ReturnType<typeof createLogger>
+  logger: Logger
 ): Promise<void> {
   const memoryPath = join(agentDir, 'memory', `thread-${threadId}.md`);
   const summarySessionFile = join(agentDir, 'sessions', `compress-${threadId}.jsonl`);
@@ -138,7 +138,7 @@ export async function runCmd(id: string): Promise<void> {
     process.exit(1);
   }
 
-  const logger = createLogger(dir);
+  const logger = createFireAndForgetLogger(join(dir, 'logs'), 'agent');
   const lockPath = join(dir, 'run.lock');
 
   // Requirement 4.10: acquire file lock

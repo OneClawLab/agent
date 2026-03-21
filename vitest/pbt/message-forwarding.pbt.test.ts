@@ -3,7 +3,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fc from 'fast-check';
 
-vi.mock('../../src/os-utils.js', () => ({
+vi.mock('../../src/repo-utils/os.js', () => ({
   execCommand: vi.fn(),
 }));
 
@@ -32,10 +32,10 @@ const replyContextArb = fc.record({
   channel_type: fc.constantFrom('external', 'internal') as fc.Arbitrary<'external' | 'internal'>,
   channel_id: safeStringArb,
   peer_id: safeStringArb,
-  session_id: fc.option(safeStringArb, { nil: undefined }),
-  visibility: fc.option(safeStringArb, { nil: undefined }),
-  source_agent_id: fc.option(safeStringArb, { nil: undefined }),
-});
+  session_id: safeStringArb,
+  visibility: safeStringArb,
+  source_agent_id: safeStringArb,
+}, { requiredKeys: ['channel_type', 'channel_id', 'peer_id'] });
 
 /** Generic message content payload */
 const contentArb = fc.record({
@@ -55,7 +55,7 @@ describe('Property 2: Source 地址透传', () => {
         await pushMessage(THREAD, source, content);
 
         expect(mockExecCommand).toHaveBeenCalledOnce();
-        const [, args] = mockExecCommand.mock.calls[0];
+        const [, args] = mockExecCommand.mock.calls[0]!;
         const argList = args as string[];
         const srcIdx = argList.indexOf('--source');
         expect(srcIdx).toBeGreaterThanOrEqual(0);
@@ -73,7 +73,7 @@ describe('Property 2: Source 地址透传', () => {
 
         await pushMessage(THREAD, source, { text: 'msg' });
 
-        const [, args] = mockExecCommand.mock.calls[0];
+        const [, args] = mockExecCommand.mock.calls[0]!;
         const argList = args as string[];
         const srcIdx = argList.indexOf('--source');
         // Exact byte-for-byte equality — no trimming, casing, or encoding changes
@@ -100,12 +100,12 @@ describe('Property 3: Reply Context 透传', () => {
           await pushReply(THREAD, replyText, replyContext);
 
           expect(mockExecCommand).toHaveBeenCalledOnce();
-          const [, args] = mockExecCommand.mock.calls[0];
+          const [, args] = mockExecCommand.mock.calls[0]!;
           const argList = args as string[];
           const contentIdx = argList.indexOf('--content');
           expect(contentIdx).toBeGreaterThanOrEqual(0);
 
-          const parsed = JSON.parse(argList[contentIdx + 1]);
+          const parsed = JSON.parse(argList[contentIdx + 1]!);
           expect(parsed.reply_context).toEqual(replyContext);
         }
       ),
@@ -121,10 +121,10 @@ describe('Property 3: Reply Context 透传', () => {
 
         await pushReply(THREAD, 'hello', replyContext);
 
-        const [, args] = mockExecCommand.mock.calls[0];
+        const [, args] = mockExecCommand.mock.calls[0]!;
         const argList = args as string[];
         const contentIdx = argList.indexOf('--content');
-        const parsed = JSON.parse(argList[contentIdx + 1]);
+        const parsed = JSON.parse(argList[contentIdx + 1]!);
         const rc = parsed.reply_context;
 
         expect(rc.channel_type).toBe(replyContext.channel_type);
@@ -154,7 +154,7 @@ describe('Property 3: Reply Context 透传', () => {
 
         await pushReply(THREAD, 'reply', replyContext);
 
-        const [, args] = mockExecCommand.mock.calls[0];
+        const [, args] = mockExecCommand.mock.calls[0]!;
         const argList = args as string[];
         const srcIdx = argList.indexOf('--source');
         expect(argList[srcIdx + 1]).toBe('self');

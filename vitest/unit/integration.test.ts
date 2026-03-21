@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
-vi.mock('../../src/os-utils.js', () => ({
+vi.mock('../../src/repo-utils/os.js', () => ({
   execCommand: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
 }));
 
@@ -46,8 +46,8 @@ vi.mock('../../src/errors.js', () => ({
 
 const mockLogInfo = vi.fn();
 const mockLogError = vi.fn();
-vi.mock('../../src/logger.js', () => ({
-  createLogger: vi.fn(() => ({ info: mockLogInfo, error: mockLogError, debug: vi.fn() })),
+vi.mock('../../src/repo-utils/logger.js', () => ({
+  createFireAndForgetLogger: vi.fn(() => ({ info: mockLogInfo, error: mockLogError, debug: vi.fn(), warn: vi.fn(), close: vi.fn().mockResolvedValue(undefined) })),
 }));
 
 let tmpBase: string;
@@ -265,7 +265,7 @@ describe('Integration: status output', () => {
     await initCmd('bot', { kind: 'user' });
     stdoutSpy.mockClear();
     await statusCmd('bot', {});
-    const output = stdoutSpy.mock.calls.map(c => c[0]).join('');
+    const output = stdoutSpy.mock.calls.map((c: unknown[]) => c[0]).join('');
     expect(output).toContain('bot');
     expect(output).toContain('user');
   });
@@ -274,7 +274,7 @@ describe('Integration: status output', () => {
     await initCmd('bot', { kind: 'user' });
     stdoutSpy.mockClear();
     await statusCmd('bot', {});
-    const output = stdoutSpy.mock.calls.map(c => c[0]).join('');
+    const output = stdoutSpy.mock.calls.map((c: unknown[]) => c[0]).join('');
     expect(output).toContain('no');
   });
 
@@ -283,7 +283,7 @@ describe('Integration: status output', () => {
     await writeFile(join(agentDir('bot'), 'run.lock'), '');
     stdoutSpy.mockClear();
     await statusCmd('bot', {});
-    const output = stdoutSpy.mock.calls.map(c => c[0]).join('');
+    const output = stdoutSpy.mock.calls.map((c: unknown[]) => c[0]).join('');
     expect(output).toContain('yes');
   });
 
@@ -291,7 +291,7 @@ describe('Integration: status output', () => {
     await initCmd('bot', { kind: 'system' });
     stdoutSpy.mockClear();
     await statusCmd('bot', { json: true });
-    const output = stdoutSpy.mock.calls.map(c => c[0]).join('');
+    const output = stdoutSpy.mock.calls.map((c: unknown[]) => c[0]).join('');
     const parsed = JSON.parse(output);
     expect(parsed).toMatchObject({
       agent_id: 'bot',
@@ -322,7 +322,7 @@ describe('Integration: list output', () => {
     await initCmd('beta', { kind: 'system' });
     stdoutSpy.mockClear();
     await listCmd({});
-    const output = stdoutSpy.mock.calls.map(c => c[0]).join('');
+    const output = stdoutSpy.mock.calls.map((c: unknown[]) => c[0]).join('');
     expect(output).toContain('alpha');
     expect(output).toContain('beta');
   });
@@ -332,7 +332,7 @@ describe('Integration: list output', () => {
     await initCmd('beta', { kind: 'system' });
     stdoutSpy.mockClear();
     await listCmd({ json: true });
-    const output = stdoutSpy.mock.calls.map(c => c[0]).join('');
+    const output = stdoutSpy.mock.calls.map((c: unknown[]) => c[0]).join('');
     const parsed = JSON.parse(output);
     expect(Array.isArray(parsed)).toBe(true);
     const ids = parsed.map((a: { agent_id: string }) => a.agent_id);
@@ -343,7 +343,7 @@ describe('Integration: list output', () => {
   it('list shows empty when no agents exist', async () => {
     stdoutSpy.mockClear();
     await listCmd({});
-    const output = stdoutSpy.mock.calls.map(c => c[0]).join('');
+    const output = stdoutSpy.mock.calls.map((c: unknown[]) => c[0]).join('');
     // Should not throw, output can be empty or show "no agents"
     expect(typeof output).toBe('string');
   });
@@ -351,7 +351,7 @@ describe('Integration: list output', () => {
   it('list --json returns empty array when no agents', async () => {
     stdoutSpy.mockClear();
     await listCmd({ json: true });
-    const output = stdoutSpy.mock.calls.map(c => c[0]).join('');
+    const output = stdoutSpy.mock.calls.map((c: unknown[]) => c[0]).join('');
     const parsed = JSON.parse(output);
     expect(Array.isArray(parsed)).toBe(true);
     expect(parsed).toHaveLength(0);

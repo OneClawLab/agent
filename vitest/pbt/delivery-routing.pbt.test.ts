@@ -3,7 +3,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fc from 'fast-check';
 
-vi.mock('../../src/os-utils.js', () => ({
+vi.mock('../../src/repo-utils/os.js', () => ({
   execCommand: vi.fn(),
 }));
 
@@ -31,10 +31,10 @@ const externalEventArb: fc.Arbitrary<DeliveryEvent> = fc.record({
       channel_type: fc.constant('external' as const),
       channel_id: safeStringArb,
       peer_id: safeStringArb,
-      session_id: fc.option(safeStringArb, { nil: undefined }),
-      visibility: fc.option(safeStringArb, { nil: undefined }),
-      source_agent_id: fc.option(safeStringArb, { nil: undefined }),
-    }),
+      session_id: safeStringArb,
+      visibility: safeStringArb,
+      source_agent_id: safeStringArb,
+    }, { requiredKeys: ['channel_type', 'channel_id', 'peer_id'] }),
   }),
 });
 
@@ -47,10 +47,10 @@ const internalEventArb: fc.Arbitrary<DeliveryEvent> = fc.record({
       channel_type: fc.constant('internal' as const),
       channel_id: safeStringArb,
       peer_id: safeStringArb,
-      session_id: fc.option(safeStringArb, { nil: undefined }),
-      visibility: fc.option(safeStringArb, { nil: undefined }),
+      session_id: safeStringArb,
+      visibility: safeStringArb,
       source_agent_id: safeStringArb, // required for internal delivery
-    }),
+    }, { requiredKeys: ['channel_type', 'channel_id', 'peer_id', 'source_agent_id'] }),
   }),
 });
 
@@ -67,7 +67,7 @@ describe('Property 6: 出站投递路由正确性', () => {
         await execXgwSend(event);
 
         expect(mockExecCommand).toHaveBeenCalledOnce();
-        const [cmd, args] = mockExecCommand.mock.calls[0];
+        const [cmd, args] = mockExecCommand.mock.calls[0]!;
         expect(cmd).toBe('xgw');
         expect(args).toContain('send');
       }),
@@ -83,7 +83,7 @@ describe('Property 6: 出站投递路由正确性', () => {
 
         await execXgwSend(event);
 
-        const [, args] = mockExecCommand.mock.calls[0];
+        const [, args] = mockExecCommand.mock.calls[0]!;
         const argList = args as string[];
         const channelIdx = argList.indexOf('--channel');
         const peerIdx = argList.indexOf('--peer');
@@ -106,7 +106,7 @@ describe('Property 6: 出站投递路由正确性', () => {
         await execThreadPush(event);
 
         expect(mockExecCommand).toHaveBeenCalledOnce();
-        const [cmd, args] = mockExecCommand.mock.calls[0];
+        const [cmd, args] = mockExecCommand.mock.calls[0]!;
         expect(cmd).toBe('thread');
         expect(args).toContain('push');
       }),
@@ -122,7 +122,7 @@ describe('Property 6: 出站投递路由正确性', () => {
 
         await execThreadPush(event);
 
-        const [, args] = mockExecCommand.mock.calls[0];
+        const [, args] = mockExecCommand.mock.calls[0]!;
         const argList = args as string[];
         const threadIdx = argList.indexOf('--thread');
 

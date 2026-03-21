@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { consumeMessages } from '../../src/runner/inbox.js';
 
-vi.mock('../../src/os-utils.js', () => ({
+vi.mock('../../src/repo-utils/os.js', () => ({
   execCommand: vi.fn(),
 }));
 
@@ -83,7 +83,7 @@ describe('consumeMessages', () => {
 
     const result = await consumeMessages(INBOX, CONSUMER);
     expect(result).toHaveLength(2);
-    expect(result[0].eventId).toBe('evt-1');
-    expect(result[1].eventId).toBe('evt-2');
+    expect(result[0]!.eventId).toBe('evt-1');
+    expect(result[1]!.eventId).toBe('evt-2');
   });
 });

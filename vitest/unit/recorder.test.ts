@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { pushMessage, pushRecord, pushError, pushReply } from '../../src/runner/recorder.js';
 
-vi.mock('../../src/os-utils.js', () => ({
+vi.mock('../../src/repo-utils/os.js', () => ({
   execCommand: vi.fn(),
 }));
 
@@ -40,7 +40,7 @@ describe('pushMessage', () => {
     const source = 'xgw:slack:channel123:user456';
     await pushMessage(THREAD, source, { text: 'msg' });
 
-    const [, args] = mockExecCommand.mock.calls[0];
+    const [, args] = mockExecCommand.mock.calls[0]!;
     const srcIdx = (args as string[]).indexOf('--source');
     expect((args as string[])[srcIdx + 1]).toBe(source);
   });
@@ -49,9 +49,9 @@ describe('pushMessage', () => {
     const content = { text: 'hi', reply_context: { channel_type: 'external', channel_id: 'c1', peer_id: 'p1' } };
     await pushMessage(THREAD, 'src', content);
 
-    const [, args] = mockExecCommand.mock.calls[0];
+    const [, args] = mockExecCommand.mock.calls[0]!;
     const contentIdx = (args as string[]).indexOf('--content');
-    expect((args as string[])[contentIdx + 1]).toBe(JSON.stringify(content));
+    expect((args as string[])[contentIdx + 1]!).toBe(JSON.stringify(content));
   });
 });
 
@@ -78,7 +78,7 @@ describe('pushRecord', () => {
 
   it('supports arbitrary subtypes', async () => {
     await pushRecord(THREAD, 'custom-subtype', 'self', {});
-    const [, args] = mockExecCommand.mock.calls[0];
+    const [, args] = mockExecCommand.mock.calls[0]!;
     const subtypeIdx = (args as string[]).indexOf('--subtype');
     expect((args as string[])[subtypeIdx + 1]).toBe('custom-subtype');
   });
@@ -101,9 +101,9 @@ describe('pushError', () => {
   it('works without optional context field', async () => {
     await pushError(THREAD, { error: 'oops' });
 
-    const [, args] = mockExecCommand.mock.calls[0];
+    const [, args] = mockExecCommand.mock.calls[0]!;
     const contentIdx = (args as string[]).indexOf('--content');
-    const content = JSON.parse((args as string[])[contentIdx + 1]);
+    const content = JSON.parse((args as string[])[contentIdx + 1]!);
     expect(content.error).toBe('oops');
     expect(content.context).toBeUndefined();
   });
@@ -144,9 +144,9 @@ describe('pushReply', () => {
     };
     await pushReply(THREAD, 'reply text', ctx);
 
-    const [, args] = mockExecCommand.mock.calls[0];
+    const [, args] = mockExecCommand.mock.calls[0]!;
     const contentIdx = (args as string[]).indexOf('--content');
-    const content = JSON.parse((args as string[])[contentIdx + 1]);
+    const content = JSON.parse((args as string[])[contentIdx + 1]!);
     expect(content.reply_context).toEqual(ctx);
   });
 

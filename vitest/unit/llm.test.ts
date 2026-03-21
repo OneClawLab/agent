@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { invokeLlm, buildSessionFilePath } from '../../src/runner/llm.js';
 
-vi.mock('../../src/os-utils.js', () => ({
+vi.mock('../../src/repo-utils/os.js', () => ({
   execCommand: vi.fn(),
 }));
 
@@ -82,7 +82,7 @@ describe('invokeLlm', () => {
 
     expect(result.reply).toBe('I will call a tool.');
     expect(result.toolCalls).toHaveLength(1);
-    expect(result.toolCalls![0].name).toBe('search');
+    expect(result.toolCalls![0]!.name).toBe('search');
   });
 
   it('parses JSON reply without toolCalls', async () => {

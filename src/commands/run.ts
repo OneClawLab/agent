@@ -261,7 +261,7 @@ export async function runCmd(id: string): Promise<void> {
       // Requirement 4.7: push toolcall records
       if (llmResult.toolCalls?.length) {
         for (const toolCall of llmResult.toolCalls) {
-          await pushRecord(threadPath, 'toolcall', 'self', toolCall as Record<string, unknown>);
+          await pushRecord(threadPath, 'toolcall', 'self', toolCall as unknown as Record<string, unknown>);
         }
         logger.info(`Recorded ${llmResult.toolCalls.length} toolcall(s) for thread ${threadId}`);
       }

@@ -60,10 +60,10 @@ describe('Property 12: 日志轮换', () => {
             expect(archives).toHaveLength(1);
 
             // 3. Archive filename matches agent-<timestamp>.log pattern
-            expect(archives[0]).toMatch(/^agent-\d{8}-\d{6}-\d{3}\.log$/);
+            expect(archives[0]!).toMatch(/^agent-\d{8}-\d{6}\.log$/);
 
             // 4. Archive file contains the old content
-            const archiveContent = await readFile(join(logsDir, archives[0]), 'utf8');
+            const archiveContent = await readFile(join(logsDir, archives[0]!), 'utf8');
             expect(archiveContent).toBe(existingContent);
           } finally {
             await rm(dir, { recursive: true, force: true });

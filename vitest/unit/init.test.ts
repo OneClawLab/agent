@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 // Mock execCommand so `thread init` is never actually invoked
-vi.mock('../../src/os-utils.js', () => ({
+vi.mock('../../src/repo-utils/os.js', () => ({
   execCommand: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
 }));
 

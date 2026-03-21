@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 
 // ── Mocks (must be hoisted before any imports of the mocked modules) ──────────
 
-vi.mock('../../src/os-utils.js', () => ({
+vi.mock('../../src/repo-utils/os.js', () => ({
   execCommand: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
 }));
 
@@ -31,8 +31,8 @@ vi.mock('../../src/runner/recorder.js', () => ({
 
 const mockLogInfo = vi.fn();
 const mockLogError = vi.fn();
-vi.mock('../../src/logger.js', () => ({
-  createLogger: vi.fn(() => ({ info: mockLogInfo, error: mockLogError, debug: vi.fn() })),
+vi.mock('../../src/repo-utils/logger.js', () => ({
+  createFireAndForgetLogger: vi.fn(() => ({ info: mockLogInfo, error: mockLogError, debug: vi.fn(), warn: vi.fn(), close: vi.fn().mockResolvedValue(undefined) })),
 }));
 
 vi.mock('../../src/identity.js', () => ({

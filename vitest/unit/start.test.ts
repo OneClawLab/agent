@@ -152,12 +152,12 @@ describe('startCmd - successful start', () => {
     expect(mockInfo).toHaveBeenCalledWith(expect.stringContaining('started'));
   });
 
-  it('creates logger with the agent directory', async () => {
+  it('creates logger with the agent logs directory', async () => {
     const dir = await createAgent('myagent');
 
     await startCmd('myagent');
 
-    expect(mockCreateLogger).toHaveBeenCalledWith(dir);
+    expect(mockCreateLogger).toHaveBeenCalledWith(join(dir, 'logs'), 'agent');
   });
 
   it('writes success message to stdout', async () => {

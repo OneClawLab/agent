@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { resolveThreadPath, routeMessage } from '../../src/runner/router.js';
 
 // Mock execCommand so `thread init` is never actually invoked
-vi.mock('../../src/os-utils.js', () => ({
+vi.mock('../../src/repo-utils/os.js', () => ({
   execCommand: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
 }));
 

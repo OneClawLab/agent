@@ -153,7 +153,7 @@ describe('Integration: init → start → run → deliver', () => {
   it('init calls thread init for inbox', async () => {
     await initCmd('bot', { kind: 'user' });
     expect(mockExecCommand).toHaveBeenCalledWith('thread', [
-      'init', '--thread', path.join(agentDir('bot'), 'inbox'),
+      'init', path.join(agentDir('bot'), 'inbox'),
     ]);
   });
 

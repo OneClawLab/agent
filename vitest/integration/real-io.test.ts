@@ -101,7 +101,7 @@ describe('initCmd: real directory creation', () => {
 
   it('calls thread init for inbox', async () => {
     await initCmd('mybot', { kind: 'user' });
-    expect(mockExec).toHaveBeenCalledWith('thread', expect.arrayContaining(['init', '--thread']));
+    expect(mockExec).toHaveBeenCalledWith('thread', expect.arrayContaining(['init']));
   });
 
   it('fails with exit 1 when agent already exists', async () => {

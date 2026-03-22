@@ -117,10 +117,10 @@ describe('initCmd - default files', () => {
 // ── thread init ───────────────────────────────────────────────────────────────
 
 describe('initCmd - thread init', () => {
-  it('calls thread init --thread <agentDir>/inbox', async () => {
+  it('calls thread init <agentDir>/inbox', async () => {
     await initCmd('myagent', { kind: 'user' });
     const expectedInbox = path.join(agentDir('myagent'), 'inbox');
-    expect(mockExecCommand).toHaveBeenCalledWith('thread', ['init', '--thread', expectedInbox]);
+    expect(mockExecCommand).toHaveBeenCalledWith('thread', ['init', expectedInbox]);
   });
 });
 

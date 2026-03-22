@@ -1,5 +1,5 @@
-import { existsSync } from 'node:fs';
-import { stat, readdir } from 'node:fs/promises';
+import { existsSync } from '../repo-utils/fs.js';
+import { stat, readdir } from '../repo-utils/fs.js';
 import { homedir } from 'node:os';
 import { path } from '../repo-utils/path.js';
 import { execCommand } from '../repo-utils/os.js';
@@ -14,6 +14,7 @@ function agentsBaseDir(): string {
 }
 
 export interface AgentStatus {
+  id: string;
   agent_id: string;
   kind: string;
   dir: string;
@@ -62,12 +63,8 @@ async function getLastActivity(dir: string): Promise<string | null> {
 
 export async function statusCmd(id: string | undefined, opts: { json?: boolean }): Promise<void> {
   if (!id) {
-    if (opts.json) {
-      process.stdout.write(JSON.stringify({ error: 'agent id is required' }) + '\n');
-    } else {
-      process.stderr.write('Error: agent id is required - usage: agent status <id>\n');
-    }
-    process.exit(1);
+    // No id given — list all agents with their status
+    return listCmd(opts);
   }
 
   const dir = agentDir(id);
@@ -90,6 +87,7 @@ export async function statusCmd(id: string | undefined, opts: { json?: boolean }
   const lastActivity = await getLastActivity(dir);
 
   const statusInfo: AgentStatus = {
+    id: config.agent_id,
     agent_id: config.agent_id,
     kind: config.kind,
     dir,

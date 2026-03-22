@@ -1,5 +1,5 @@
-import { existsSync } from 'node:fs';
-import { writeFile, mkdir } from 'node:fs/promises';
+import { existsSync } from '../repo-utils/fs.js';
+import { writeFile, mkdir } from '../repo-utils/fs.js';
 import { homedir } from 'node:os';
 import { createInterface } from 'node:readline';
 import { path } from '../repo-utils/path.js';

@@ -13,183 +13,128 @@
 #
 set -uo pipefail
 
+source "$(dirname "$0")/scripts/e2e-lib.sh"
+
 AGENT="agent"
-TD=$(mktemp -d)
-PASS=0; FAIL=0
 AID="e2e-test-$$"
 AGENT_DIR="${THECLAW_HOME:-$HOME/.theclaw}/agents/$AID"
 
-cleanup() {
-  rm -rf "$TD"
+on_cleanup() {
   rm -rf "$AGENT_DIR"
 }
-trap cleanup EXIT
 
-G() { printf "\033[32m  ✓ %s\033[0m\n" "$*"; PASS=$((PASS+1)); }
-R() { printf "\033[31m  ✗ %s\033[0m\n" "$*"; FAIL=$((FAIL+1)); }
-S() { echo ""; printf "\033[33m━━ %s ━━\033[0m\n" "$*"; }
+setup_e2e
 
 # ── Pre-flight ────────────────────────────────────────────────
-S "Pre-flight"
-if $AGENT --version >/dev/null 2>&1; then G "agent binary OK"; else R "agent broken — run npm run build"; exit 1; fi
-if thread --version >/dev/null 2>&1; then G "thread binary OK"; else R "thread not installed — run: cd ../thread && npm run release:local"; exit 1; fi
+section "Pre-flight"
 
-DEFAULT_JSON=$(pai model default --json 2>/dev/null || true)
-PROVIDER=$(echo "$DEFAULT_JSON" | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0,'utf8')).defaultProvider ?? '')" 2>/dev/null || true)
-[[ -n "$PROVIDER" ]] && G "Default provider: $PROVIDER" || { R "No default provider — run: pai model default --name <provider>"; exit 1; }
+require_bin $AGENT "run npm run build"
+require_bin thread "run: cd ../thread && npm run release:local"
+
+PROVIDER=$(pai model default --json 2>/dev/null | json_field_from_stdin "defaultProvider")
+if [[ -z "$PROVIDER" ]]; then fail "No default provider — run: pai model default --name <provider>"; exit 1; fi
+pass "Default provider: $PROVIDER"
 
 # ══════════════════════════════════════════════════════════════
 # 1. init
 # ══════════════════════════════════════════════════════════════
-S "1. init"
-$AGENT init "$AID" >/dev/null 2>&1
-EC=$?
-[[ $EC -eq 0 ]] && G "exit=0" || R "exit=$EC"
-[[ -d "$AGENT_DIR" ]] && G "agent directory created" || R "agent directory missing"
-[[ -f "$AGENT_DIR/config.yaml" ]] && G "config.yaml created" || R "config.yaml missing"
-[[ -f "$AGENT_DIR/IDENTITY.md" ]] && G "IDENTITY.md created" || R "IDENTITY.md missing"
-[[ -f "$AGENT_DIR/inbox/events.db" ]] && G "inbox thread initialized" || R "inbox thread missing"
+section "1. init"
+run_cmd $AGENT init "$AID"
+assert_exit0
+assert_file_exists "$AGENT_DIR/config.yaml" "config.yaml"
+assert_file_exists "$AGENT_DIR/IDENTITY.md" "IDENTITY.md"
+assert_file_exists "$AGENT_DIR/inbox/events.db" "inbox thread"
 
 # ══════════════════════════════════════════════════════════════
 # 2. init — duplicate exits 1
 # ══════════════════════════════════════════════════════════════
-S "2. init — duplicate"
-$AGENT init "$AID" >/dev/null 2>&1
-EC=$?
-[[ $EC -eq 1 ]] && G "exit=1 for duplicate init" || R "exit=$EC (expected 1)"
+section "2. init — duplicate"
+run_cmd $AGENT init "$AID"
+assert_exit 1
 
 # ══════════════════════════════════════════════════════════════
 # 3. list
 # ══════════════════════════════════════════════════════════════
-S "3. list"
-OUT="$TD/3.txt"
-$AGENT list >"$OUT" 2>/dev/null
-EC=$?
-[[ $EC -eq 0 ]] && G "exit=0" || R "exit=$EC"
-grep -q "$AID" "$OUT" && G "agent appears in list" || R "agent missing from list"
+section "3. list"
+run_cmd $AGENT list
+assert_exit0
+assert_contains "$AID"
 
 # ══════════════════════════════════════════════════════════════
 # 4. list --json
 # ══════════════════════════════════════════════════════════════
-S "4. list --json"
-OUT="$TD/4.txt"
-$AGENT list --json >"$OUT" 2>/dev/null
-EC=$?
-[[ $EC -eq 0 ]] && G "exit=0" || R "exit=$EC"
-if node -e "const d=JSON.parse(require('fs').readFileSync('$OUT','utf8')); if(!Array.isArray(d)) throw 0" 2>/dev/null; then
-  G "valid JSON array"
-else
-  R "invalid JSON or not an array"
-fi
+section "4. list --json"
+run_cmd $AGENT list --json
+assert_exit0
+assert_json_array
 
 # ══════════════════════════════════════════════════════════════
 # 5. status (all agents)
 # ══════════════════════════════════════════════════════════════
-S "5. status"
-OUT="$TD/5.txt"
-$AGENT status >"$OUT" 2>/dev/null
-EC=$?
-[[ $EC -eq 0 ]] && G "exit=0" || R "exit=$EC"
-grep -q "$AID" "$OUT" && G "agent appears in status" || R "agent missing from status"
+section "5. status"
+run_cmd $AGENT status
+assert_exit0
+assert_contains "$AID"
 
 # ══════════════════════════════════════════════════════════════
 # 6. status <id>
 # ══════════════════════════════════════════════════════════════
-S "6. status <id>"
-OUT="$TD/6.txt"
-$AGENT status "$AID" >"$OUT" 2>/dev/null
-EC=$?
-[[ $EC -eq 0 ]] && G "exit=0" || R "exit=$EC"
-[[ -s "$OUT" ]] && G "status output non-empty" || R "status output empty"
+section "6. status <id>"
+run_cmd $AGENT status "$AID"
+assert_exit0
+assert_nonempty
 
 # ══════════════════════════════════════════════════════════════
 # 7. status <id> --json
 # ══════════════════════════════════════════════════════════════
-S "7. status <id> --json"
-OUT="$TD/7.txt"
-$AGENT status "$AID" --json >"$OUT" 2>/dev/null
-EC=$?
-[[ $EC -eq 0 ]] && G "exit=0" || R "exit=$EC"
-if node -e "const d=JSON.parse(require('fs').readFileSync('$OUT','utf8')); if(!d.id) throw 0" 2>/dev/null; then
-  G "valid JSON with id field"
-else
-  R "invalid JSON or missing id field"
-fi
+section "7. status <id> --json"
+run_cmd $AGENT status "$AID" --json
+assert_exit0
+assert_json_field "$OUT" "id"
 
 # ══════════════════════════════════════════════════════════════
 # 8. start
 # ══════════════════════════════════════════════════════════════
-S "8. start"
-$AGENT start "$AID" >/dev/null 2>&1
-EC=$?
-[[ $EC -eq 0 ]] && G "exit=0" || R "exit=$EC"
-# Verify subscription was registered via thread info
-INBOX_PATH="$AGENT_DIR/inbox"
-INFO=$(thread info --thread "$INBOX_PATH" 2>/dev/null || true)
-echo "$INFO" | grep -q "inbox" && G "inbox subscription registered" || R "inbox subscription missing"
+section "8. start"
+run_cmd $AGENT start "$AID"
+assert_exit0
+INBOX_INFO=$(thread info --thread "$AGENT_DIR/inbox" 2>/dev/null || true)
+echo "$INBOX_INFO" | grep -q "inbox" && pass "inbox subscription registered" || fail "inbox subscription missing"
 
 # ══════════════════════════════════════════════════════════════
-# 9. send — push event to inbox
+# 9. send
 # ══════════════════════════════════════════════════════════════
-S "9. send"
-$AGENT send "$AID" \
-  --source "e2e" \
-  --type "message" \
-  --content '{"text":"hello from e2e"}' >/dev/null 2>&1
-EC=$?
-[[ $EC -eq 0 ]] && G "exit=0" || R "exit=$EC"
-# Verify event landed in inbox
-INBOX_COUNT=$(thread peek --thread "$INBOX_PATH" --last-event-id 0 2>/dev/null | wc -l | tr -d ' ')
-[[ "$INBOX_COUNT" -ge 1 ]] && G "event in inbox (count: $INBOX_COUNT)" || R "inbox empty after send"
+section "9. send"
+run_cmd $AGENT send "$AID" --source "e2e" --type "message" --content '{"text":"hello from e2e"}'
+assert_exit0
+INBOX_COUNT=$(thread peek --thread "$AGENT_DIR/inbox" --last-event-id 0 2>/dev/null | wc -l | tr -d ' ')
+[[ "$INBOX_COUNT" -ge 1 ]] && pass "event in inbox (count: $INBOX_COUNT)" || fail "inbox empty after send"
 
 # ══════════════════════════════════════════════════════════════
 # 10. send — with subtype
 # ══════════════════════════════════════════════════════════════
-S "10. send — with subtype"
-$AGENT send "$AID" \
-  --source "e2e" \
-  --type "record" \
-  --subtype "toolcall" \
-  --content '{"tool":"bash","args":["echo hi"]}' >/dev/null 2>&1
-EC=$?
-[[ $EC -eq 0 ]] && G "exit=0" || R "exit=$EC"
+section "10. send — with subtype"
+run_cmd $AGENT send "$AID" --source "e2e" --type "record" --subtype "toolcall" \
+  --content '{"tool":"bash","args":["echo hi"]}'
+assert_exit0
 
 # ══════════════════════════════════════════════════════════════
 # 11. stop
 # ══════════════════════════════════════════════════════════════
-S "11. stop"
-$AGENT stop "$AID" >/dev/null 2>&1
-EC=$?
-[[ $EC -eq 0 ]] && G "exit=0" || R "exit=$EC"
-# Verify subscription was removed
-INFO=$(thread info --thread "$INBOX_PATH" 2>/dev/null || true)
-echo "$INFO" | grep -q "inbox" && R "inbox subscription still present after stop" || G "inbox subscription removed"
+section "11. stop"
+run_cmd $AGENT stop "$AID"
+assert_exit0
+INBOX_INFO=$(thread info --thread "$AGENT_DIR/inbox" 2>/dev/null || true)
+echo "$INBOX_INFO" | grep -q "^  - inbox" \
+  && fail "inbox subscription still present after stop" \
+  || pass "inbox subscription removed"
 
 # ══════════════════════════════════════════════════════════════
-# 12. Error — init unknown agent operations exit 1
+# 12. Error — operations on non-existent agent exit 1
 # ══════════════════════════════════════════════════════════════
-S "12. Error — operations on non-existent agent"
-$AGENT start "no-such-agent-$$" >/dev/null 2>&1
-EC=$?
-[[ $EC -eq 1 ]] && G "start non-existent → exit=1" || R "exit=$EC (expected 1)"
+section "12. Error — operations on non-existent agent"
+run_cmd $AGENT start "no-such-agent-$"; assert_exit 1
+run_cmd $AGENT stop  "no-such-agent-$"; assert_exit 1
+run_cmd $AGENT status "no-such-agent-$"; assert_exit 1
 
-$AGENT stop "no-such-agent-$$" >/dev/null 2>&1
-EC=$?
-[[ $EC -eq 1 ]] && G "stop non-existent → exit=1" || R "exit=$EC (expected 1)"
-
-$AGENT status "no-such-agent-$$" >/dev/null 2>&1
-EC=$?
-[[ $EC -eq 1 ]] && G "status non-existent → exit=1" || R "exit=$EC (expected 1)"
-
-# ══════════════════════════════════════════════════════════════
-# Summary
-# ══════════════════════════════════════════════════════════════
-S "Results"
-echo ""
-TOTAL=$((PASS + FAIL))
-printf "  Passed: \033[32m%d\033[0m\n" "$PASS"
-printf "  Failed: %s\n" "$( [[ $FAIL -gt 0 ]] && printf "\033[31m%d\033[0m" "$FAIL" || echo 0 )"
-echo "  Total:  $TOTAL"
-echo ""
-[[ $FAIL -eq 0 ]] && printf "\033[32mAll tests passed!\033[0m\n" && exit 0
-printf "\033[31mSome tests failed.\033[0m\n" && exit 1
+summary_and_exit

@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync } from '../repo-utils/fs.js';
 import { homedir } from 'node:os';
 import { path } from '../repo-utils/path.js';
 import { loadConfig } from '../config.js';
@@ -33,7 +33,7 @@ export async function sendCmd(id: string, opts: SendOptions): Promise<void> {
   }
 
   const config = await loadConfig(dir);
-  const inboxPath = config.inbox.path;
+  const inboxPath = path.resolve(config.inbox.path);
 
   if (!existsSync(inboxPath)) {
     process.stderr.write(

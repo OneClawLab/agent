@@ -1,5 +1,5 @@
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readFile } from './repo-utils/fs.js';
+import { path } from './repo-utils/path.js';
 import { parse as parseYaml } from 'yaml';
 import type { AgentConfig, RoutingMode } from './types.js';
 
@@ -13,7 +13,7 @@ import type { AgentConfig, RoutingMode } from './types.js';
  * Throws a descriptive error if the file is missing or malformed.
  */
 export async function loadConfig(agentDir: string): Promise<AgentConfig> {
-  const configPath = join(agentDir, 'config.yaml');
+  const configPath = path.join(agentDir, 'config.yaml');
 
   let raw: string;
   try {

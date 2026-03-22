@@ -1,4 +1,4 @@
-import { join, dirname } from 'node:path';
+import { path } from './repo-utils/path.js';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { initCmd } from './commands/init.js';
@@ -10,7 +10,7 @@ import { runCmd } from './commands/run.js';
 import { deliverCmd } from './commands/deliver.js';
 import { sendCmd } from './commands/send.js';
 import { chatCmd } from './commands/chat.js';
-import { readFileSync } from 'node:fs';
+import { readFileSync } from './repo-utils/fs.js';
 
 // Helper: wrap async action and handle errors uniformly
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -26,8 +26,8 @@ function wrapAction(fn: (...args: any[]) => Promise<void>) {
 }
 
 // Read version from package.json
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const { version: pkgVersion } = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf8')) as { version: string };
+const __dirname = path.dirname(path.toPosixPath(fileURLToPath(import.meta.url)));
+const { version: pkgVersion } = JSON.parse(readFileSync(path.join(__dirname, '../package.json'), 'utf8')) as { version: string };
 
 const program = new Command('agent')
   .description('Agent runtime and lifecycle management')

@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync } from '../repo-utils/fs.js';
 import { homedir } from 'node:os';
 import { path } from '../repo-utils/path.js';
 import { execCommand } from '../repo-utils/os.js';

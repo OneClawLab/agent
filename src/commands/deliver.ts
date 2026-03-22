@@ -1,5 +1,5 @@
-import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
+import { path } from '../repo-utils/path.js';
 import { loadConfig } from '../config.js';
 import { createFireAndForgetLogger } from '../repo-utils/logger.js';
 import { deliverBatch } from '../runner/deliver.js';
@@ -8,19 +8,16 @@ import { deliverBatch } from '../runner/deliver.js';
  * Try to infer the agent directory from the thread path.
  * Thread paths are typically: ~/.theclaw/agents/<id>/threads/...
  * Falls back to undefined if the pattern doesn't match.
- * Uses forward-slash normalisation for cross-platform compatibility.
  */
 function inferAgentDir(threadPath: string): string | undefined {
-  const base = join(homedir(), '.theclaw', 'agents');
-  // Normalise to forward slashes for reliable matching on all platforms
-  const normPath = threadPath.replace(/\\/g, '/');
-  const normBase = base.replace(/\\/g, '/');
+  const base = path.join(path.toPosixPath(homedir()), '.theclaw', 'agents');
+  const normPath = path.toPosixPath(threadPath);
+  const normBase = base;
   if (!normPath.startsWith(normBase)) return undefined;
-  // Extract the agent id segment after the base
-  const rel = normPath.slice(normBase.length + 1); // e.g. "myagent/threads/peers/..."
+  const rel = normPath.slice(normBase.length + 1);
   const agentId = rel.split('/')[0];
   if (!agentId) return undefined;
-  return join(base, agentId);
+  return path.join(base, agentId);
 }
 
 /**
@@ -59,7 +56,7 @@ export async function deliverCmd(opts: { thread?: string; consumer?: string }): 
   }
 
   // Set up logger if we have an agent dir
-  const logger = agentDir ? createFireAndForgetLogger(join(agentDir, 'logs'), 'agent') : null;
+  const logger = agentDir ? createFireAndForgetLogger(path.join(agentDir, 'logs'), 'agent') : null;
   logger?.info(`deliver: thread=${threadPath} consumer=${consumerName} maxAttempts=${maxAttempts}`);
 
   await deliverBatch(threadPath, consumerName, maxAttempts);

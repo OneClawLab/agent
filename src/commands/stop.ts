@@ -1,6 +1,6 @@
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync } from '../repo-utils/fs.js';
 import { homedir } from 'node:os';
+import { path } from '../repo-utils/path.js';
 import { execCommand } from '../repo-utils/os.js';
 import { loadConfig } from '../config.js';
 
@@ -8,7 +8,7 @@ import { loadConfig } from '../config.js';
  * Resolve the agent directory path: ~/.theclaw/agents/<id>/
  */
 function agentDir(id: string): string {
-  return join(homedir(), '.theclaw', 'agents', id);
+  return path.join(path.toPosixPath(homedir()), '.theclaw', 'agents', id);
 }
 
 /**
@@ -31,7 +31,7 @@ export async function stopCmd(id: string): Promise<void> {
 
   // Load config to get inbox path
   const config = await loadConfig(dir);
-  const inboxPath = config.inbox.path;
+  const inboxPath = path.resolve(config.inbox.path);
 
   // Requirement 3.1: unregister inbox subscription
   await execCommand('thread', [

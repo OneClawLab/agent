@@ -8,6 +8,8 @@ import { statusCmd } from './commands/status.js';
 import { listCmd } from './commands/status.js';
 import { runCmd } from './commands/run.js';
 import { deliverCmd } from './commands/deliver.js';
+import { sendCmd } from './commands/send.js';
+import { chatCmd } from './commands/chat.js';
 import { readFileSync } from 'node:fs';
 
 // Helper: wrap async action and handle errors uniformly
@@ -76,6 +78,20 @@ program
   .option('--thread <path>', 'Thread path')
   .option('--consumer <name>', 'Consumer name')
   .action(wrapAction(deliverCmd));
+
+program
+  .command('send <id>')
+  .description('Push an event into an agent inbox — shorthand for: thread push --thread <inbox> ... (same parameters, just resolves inbox path for you)')
+  .requiredOption('--source <source>', 'Event source')
+  .requiredOption('--type <type>', 'Event type (e.g. message, record)')
+  .requiredOption('--content <content>', 'Event content (string or JSON)')
+  .option('--subtype <subtype>', 'Event subtype (e.g. toolcall, error)')
+  .action(wrapAction(sendCmd));
+
+program
+  .command('chat <id>')
+  .description('[DEBUG] Interactive REPL that talks directly to an agent, bypassing xgw/notifier. Not a substitute for the normal flow — use for local development and LLM behaviour testing only.')
+  .action(wrapAction(chatCmd));
 
 program.exitOverride((err) => {
   // commander uses exit code 1 for --help/--version; use 2 for usage errors

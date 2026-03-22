@@ -55,7 +55,7 @@ export async function initCmd(id: string, opts: { kind: string }): Promise<void>
   await writeFile(path.join(dir, 'USAGE.md'), `# Usage\n\nThis agent responds to messages in its inbox.\n`);
   await writeFile(path.join(dir, 'config.yaml'), defaultConfig(id, kind));
 
-  await execCommand('thread', ['init', '--thread', path.join(dir, 'inbox')]);
+  await execCommand('thread', ['init', path.join(dir, 'inbox')]);
 
   process.stdout.write(`Agent '${id}' initialized at ${dir}\n`);
 }

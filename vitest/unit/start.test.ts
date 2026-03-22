@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { path } from '../../src/repo-utils/path.js';
 
 // Mock execCommand so `thread subscribe` is never actually invoked
 vi.mock('../../src/repo-utils/os.js', () => ({
@@ -40,22 +40,22 @@ const { startCmd } = await import('../../src/commands/start.js');
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function agentDir(id: string) {
-  return join(tmpBase, '.theclaw', 'agents', id);
+  return path.join(tmpBase, '.theclaw', 'agents', id);
 }
 
 async function createAgent(id: string, inboxPath?: string) {
   const dir = agentDir(id);
-  await mkdir(join(dir, 'logs'), { recursive: true });
-  const resolvedInbox = inboxPath ?? join(dir, 'inbox');
+  await mkdir(path.join(dir, 'logs'), { recursive: true });
+  const resolvedInbox = inboxPath ?? path.join(dir, 'inbox');
   await writeFile(
-    join(dir, 'config.yaml'),
+    path.join(dir, 'config.yaml'),
     `agent_id: ${id}\nkind: user\npai:\n  provider: openai\n  model: gpt-4o\ninbox:\n  path: ${resolvedInbox}\nrouting:\n  default: per-peer\noutbound: []\n`
   );
   return dir;
 }
 
 beforeEach(async () => {
-  tmpBase = await mkdtemp(join(tmpdir(), 'agent-start-test-'));
+  tmpBase = path.resolve(await mkdtemp(path.join(path.resolve(tmpdir()), 'agent-start-test-')));
   mockExecCommand.mockClear();
   mockInfo.mockClear();
   mockError.mockClear();
@@ -117,7 +117,7 @@ describe('startCmd - agent not found', () => {
 describe('startCmd - successful start', () => {
   it('calls thread subscribe with correct arguments', async () => {
     const dir = await createAgent('myagent');
-    const inboxPath = join(dir, 'inbox');
+    const inboxPath = path.join(dir, 'inbox');
 
     await startCmd('myagent');
 
@@ -130,7 +130,7 @@ describe('startCmd - successful start', () => {
   });
 
   it('uses inbox path from config', async () => {
-    const customInbox = join(tmpBase, 'custom', 'inbox');
+    const customInbox = path.join(tmpBase, 'custom', 'inbox');
     await createAgent('myagent', customInbox);
 
     await startCmd('myagent');
@@ -157,7 +157,7 @@ describe('startCmd - successful start', () => {
 
     await startCmd('myagent');
 
-    expect(mockCreateLogger).toHaveBeenCalledWith(join(dir, 'logs'), 'agent');
+    expect(mockCreateLogger).toHaveBeenCalledWith(path.join(dir, 'logs'), 'agent');
   });
 
   it('writes success message to stdout', async () => {

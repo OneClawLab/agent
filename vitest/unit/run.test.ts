@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { path } from '../../src/repo-utils/path.js';
 
 // ── Mocks (must be hoisted before any imports of the mocked modules) ──────────
 
@@ -80,18 +80,18 @@ const { runCmd } = await import('../../src/commands/run.js');
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function agentDir(id: string) {
-  return join(tmpBase, '.theclaw', 'agents', id);
+  return path.join(tmpBase, '.theclaw', 'agents', id);
 }
 
 async function createAgent(id: string) {
   const dir = agentDir(id);
-  await mkdir(join(dir, 'logs'), { recursive: true });
-  await mkdir(join(dir, 'sessions'), { recursive: true });
-  await mkdir(join(dir, 'memory'), { recursive: true });
-  await writeFile(join(dir, 'IDENTITY.md'), `# ${id}\nYou are ${id}.\n`);
+  await mkdir(path.join(dir, 'logs'), { recursive: true });
+  await mkdir(path.join(dir, 'sessions'), { recursive: true });
+  await mkdir(path.join(dir, 'memory'), { recursive: true });
+  await writeFile(path.join(dir, 'IDENTITY.md'), `# ${id}\nYou are ${id}.\n`);
   await writeFile(
-    join(dir, 'config.yaml'),
-    `agent_id: ${id}\nkind: user\npai:\n  provider: openai\n  model: gpt-4o\ninbox:\n  path: ${join(dir, 'inbox')}\nrouting:\n  default: per-peer\noutbound: []\nretry:\n  max_attempts: 3\n`
+    path.join(dir, 'config.yaml'),
+    `agent_id: ${id}\nkind: user\npai:\n  provider: openai\n  model: gpt-4o\ninbox:\n  path: ${path.join(dir, 'inbox')}\nrouting:\n  default: per-peer\noutbound: []\nretry:\n  max_attempts: 3\n`
   );
   return dir;
 }
@@ -115,12 +115,12 @@ function makeMessage(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(async () => {
-  tmpBase = await mkdtemp(join(tmpdir(), 'agent-run-test-'));
+  tmpBase = path.resolve(await mkdtemp(path.join(path.resolve(tmpdir()), 'agent-run-test-')));
   vi.clearAllMocks();
   // Restore default mock implementations after clearAllMocks
   mockExecCommand.mockResolvedValue({ stdout: '', stderr: '' });
   mockConsumeMessages.mockResolvedValue([]);
-  mockRouteMessage.mockResolvedValue({ threadPath: join(tmpBase, 'thread'), isNew: false });
+  mockRouteMessage.mockResolvedValue({ threadPath: path.join(tmpBase, 'thread'), isNew: false });
   mockInvokeLlm.mockResolvedValue({ reply: 'Hello!' });
   mockPushMessage.mockResolvedValue('evt-1');
   mockPushReply.mockResolvedValue('evt-2');
@@ -156,7 +156,7 @@ describe('runCmd - agent not found', () => {
 describe('runCmd - file lock', () => {
   it('exits with code 1 when run.lock already exists', async () => {
     const dir = await createAgent('myagent');
-    await writeFile(join(dir, 'run.lock'), '9999');
+    await writeFile(path.join(dir, 'run.lock'), '9999');
 
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
@@ -176,7 +176,7 @@ describe('runCmd - file lock', () => {
     let lockExistedDuringRun = false;
 
     mockConsumeMessages.mockImplementation(async () => {
-      lockExistedDuringRun = existsSync(join(dir, 'run.lock'));
+      lockExistedDuringRun = existsSync(path.join(dir, 'run.lock'));
       return [];
     });
 
@@ -191,7 +191,7 @@ describe('runCmd - file lock', () => {
 
     await runCmd('myagent');
 
-    expect(existsSync(join(dir, 'run.lock'))).toBe(false);
+    expect(existsSync(path.join(dir, 'run.lock'))).toBe(false);
   });
 
   it('removes run.lock even when an error occurs', async () => {
@@ -200,7 +200,7 @@ describe('runCmd - file lock', () => {
 
     await expect(runCmd('myagent')).rejects.toThrow('inbox error');
 
-    expect(existsSync(join(dir, 'run.lock'))).toBe(false);
+    expect(existsSync(path.join(dir, 'run.lock'))).toBe(false);
   });
 });
 
@@ -235,7 +235,7 @@ describe('runCmd - message processing', () => {
     await runCmd('myagent');
 
     expect(mockConsumeMessages).toHaveBeenCalledWith(
-      join(dir, 'inbox'),
+      path.join(dir, 'inbox'),
       'inbox'
     );
   });
@@ -271,7 +271,7 @@ describe('runCmd - message processing', () => {
   it('builds system prompt with peerId and threadId', async () => {
     await createAgent('myagent');
     mockConsumeMessages.mockResolvedValue([makeMessage()]);
-    mockRouteMessage.mockResolvedValue({ threadPath: join(tmpBase, 'threads', 'peers', 'telegram-user42'), isNew: false });
+    mockRouteMessage.mockResolvedValue({ threadPath: path.join(tmpBase, 'threads', 'peers', 'telegram-user42'), isNew: false });
 
     await runCmd('myagent');
 
@@ -284,7 +284,7 @@ describe('runCmd - message processing', () => {
 
   it('invokes LLM with correct params', async () => {
     const dir = await createAgent('myagent');
-    const threadPath = join(dir, 'threads', 'peers', 'telegram-user42');
+    const threadPath = path.join(dir, 'threads', 'peers', 'telegram-user42');
     mockConsumeMessages.mockResolvedValue([makeMessage()]);
     mockRouteMessage.mockResolvedValue({ threadPath, isNew: false });
 
@@ -379,7 +379,7 @@ describe('runCmd - toolcalls', () => {
 describe('runCmd - outbound consumer registration', () => {
   it('registers outbound consumer when thread is new', async () => {
     await createAgent('myagent');
-    const threadPath = join(tmpBase, 'threads', 'peers', 'telegram-user42');
+    const threadPath = path.join(tmpBase, 'threads', 'peers', 'telegram-user42');
     mockConsumeMessages.mockResolvedValue([makeMessage()]);
     mockRouteMessage.mockResolvedValue({ threadPath, isNew: true });
 
@@ -394,7 +394,7 @@ describe('runCmd - outbound consumer registration', () => {
 
   it('does NOT register outbound consumer for existing thread', async () => {
     await createAgent('myagent');
-    const threadPath = join(tmpBase, 'threads', 'peers', 'telegram-user42');
+    const threadPath = path.join(tmpBase, 'threads', 'peers', 'telegram-user42');
     mockConsumeMessages.mockResolvedValue([makeMessage()]);
     mockRouteMessage.mockResolvedValue({ threadPath, isNew: false });
 
@@ -408,7 +408,7 @@ describe('runCmd - outbound consumer registration', () => {
 
   it('outbound consumer handler includes thread path', async () => {
     await createAgent('myagent');
-    const threadPath = join(tmpBase, 'threads', 'peers', 'telegram-user42');
+    const threadPath = path.join(tmpBase, 'threads', 'peers', 'telegram-user42');
     mockConsumeMessages.mockResolvedValue([makeMessage()]);
     mockRouteMessage.mockResolvedValue({ threadPath, isNew: true });
 
@@ -425,7 +425,7 @@ describe('runCmd - outbound consumer registration', () => {
 
   it('outbound consumer uses filter for self messages only', async () => {
     await createAgent('myagent');
-    const threadPath = join(tmpBase, 'threads', 'peers', 'telegram-user42');
+    const threadPath = path.join(tmpBase, 'threads', 'peers', 'telegram-user42');
     mockConsumeMessages.mockResolvedValue([makeMessage()]);
     mockRouteMessage.mockResolvedValue({ threadPath, isNew: true });
 

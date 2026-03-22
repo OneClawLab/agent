@@ -1,70 +1,53 @@
 import { existsSync } from 'node:fs';
 import { stat, readdir } from 'node:fs/promises';
-import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { path } from '../repo-utils/path.js';
+import { execCommand } from '../repo-utils/os.js';
 import { loadConfig } from '../config.js';
 
-/**
- * Resolve the agent directory path: ~/.theclaw/agents/<id>/
- */
 function agentDir(id: string): string {
-  return join(homedir(), '.theclaw', 'agents', id);
+  return path.join(path.toPosixPath(homedir()), '.theclaw', 'agents', id);
 }
 
-/**
- * Agents base directory: ~/.theclaw/agents/
- */
 function agentsBaseDir(): string {
-  return join(homedir(), '.theclaw', 'agents');
+  return path.join(path.toPosixPath(homedir()), '.theclaw', 'agents');
 }
 
 export interface AgentStatus {
   agent_id: string;
   kind: string;
+  dir: string;
+  model: string;
+  inbox_path: string;
+  inbox_pending: number;
   started: boolean;
   last_activity: string | null;
 }
 
 /**
- * Determine if an agent is "started" by checking whether run.lock exists.
- * run.lock is held while agent run is executing; its presence indicates
- * the agent is actively running (or was running and crashed).
- * We also check if the inbox subscription is active by checking for
- * a subscribers file in the inbox directory.
+ * Query thread info JSON to determine subscription status and pending count.
+ * Returns { subscribed, inbox_pending }.
  */
-async function isStarted(dir: string, inboxPath: string): Promise<boolean> {
-  // Check run.lock — agent is currently running
-  if (existsSync(join(dir, 'run.lock'))) {
-    return true;
+async function getInboxInfo(inboxPath: string): Promise<{ subscribed: boolean; inbox_pending: number }> {
+  try {
+    const { stdout } = await execCommand('thread', ['info', '--thread', inboxPath, '--json'], 5000);
+    const info = JSON.parse(stdout) as {
+      event_count: number;
+      subscriptions: Array<{ consumer_id: string; last_acked_id: number }>;
+    };
+    const sub = info.subscriptions.find(s => s.consumer_id === 'inbox');
+    const subscribed = sub !== undefined;
+    const inbox_pending = subscribed ? Math.max(0, info.event_count - sub.last_acked_id) : 0;
+    return { subscribed, inbox_pending };
+  } catch {
+    return { subscribed: false, inbox_pending: 0 };
   }
-  // Check for inbox subscribers file — subscription is registered
-  const subscribersFile = join(inboxPath, 'subscribers.json');
-  if (existsSync(subscribersFile)) {
-    try {
-      const { readFile } = await import('node:fs/promises');
-      const raw = await readFile(subscribersFile, 'utf8');
-      const subscribers = JSON.parse(raw);
-      // If there's an 'inbox' consumer registered, agent is started
-      if (Array.isArray(subscribers)) {
-        return subscribers.some((s: { name?: string }) => s.name === 'inbox');
-      }
-      if (typeof subscribers === 'object' && subscribers !== null) {
-        return 'inbox' in subscribers;
-      }
-    } catch {
-      // Can't parse — fall through
-    }
-  }
-  return false;
 }
 
-/**
- * Get last activity time from log file mtime, falling back to run.lock mtime.
- */
 async function getLastActivity(dir: string): Promise<string | null> {
   const candidates = [
-    join(dir, 'logs', 'agent.log'),
-    join(dir, 'run.lock'),
+    path.join(dir, 'logs', 'agent.log'),
+    path.join(dir, 'run.lock'),
   ];
   for (const p of candidates) {
     try {
@@ -77,17 +60,12 @@ async function getLastActivity(dir: string): Promise<string | null> {
   return null;
 }
 
-/**
- * Show status of a specific agent.
- * Requirements: 10.1, 10.3
- */
 export async function statusCmd(id: string | undefined, opts: { json?: boolean }): Promise<void> {
   if (!id) {
-    const msg = 'Error: agent id is required - usage: agent status <id>';
     if (opts.json) {
-      process.stdout.write(JSON.stringify({ error: 'agent id is required', suggestion: 'usage: agent status <id>' }) + '\n');
+      process.stdout.write(JSON.stringify({ error: 'agent id is required' }) + '\n');
     } else {
-      process.stderr.write(msg + '\n');
+      process.stderr.write('Error: agent id is required - usage: agent status <id>\n');
     }
     process.exit(1);
   }
@@ -105,13 +83,19 @@ export async function statusCmd(id: string | undefined, opts: { json?: boolean }
   }
 
   const config = await loadConfig(dir);
-  const inboxPath = config.inbox.path;
-  const started = await isStarted(dir, inboxPath);
+  const inboxPath = path.resolve(config.inbox.path);
+  const { subscribed, inbox_pending } = await getInboxInfo(inboxPath);
+  const lockExists = existsSync(path.join(dir, 'run.lock'));
+  const started = subscribed || lockExists;
   const lastActivity = await getLastActivity(dir);
 
   const statusInfo: AgentStatus = {
     agent_id: config.agent_id,
     kind: config.kind,
+    dir,
+    model: `${config.pai.provider}/${config.pai.model}`,
+    inbox_path: inboxPath,
+    inbox_pending,
     started,
     last_activity: lastActivity,
   };
@@ -121,15 +105,15 @@ export async function statusCmd(id: string | undefined, opts: { json?: boolean }
   } else {
     process.stdout.write(`Agent:         ${statusInfo.agent_id}\n`);
     process.stdout.write(`Kind:          ${statusInfo.kind}\n`);
+    process.stdout.write(`Dir:           ${statusInfo.dir}\n`);
+    process.stdout.write(`Model:         ${statusInfo.model}\n`);
+    process.stdout.write(`Inbox:         ${statusInfo.inbox_path}\n`);
+    process.stdout.write(`Inbox pending: ${statusInfo.inbox_pending}\n`);
     process.stdout.write(`Started:       ${statusInfo.started ? 'yes' : 'no'}\n`);
     process.stdout.write(`Last activity: ${statusInfo.last_activity ?? 'none'}\n`);
   }
 }
 
-/**
- * List all initialized agents.
- * Requirements: 10.2, 10.3
- */
 export async function listCmd(opts: { json?: boolean }): Promise<void> {
   const baseDir = agentsBaseDir();
 
@@ -152,8 +136,8 @@ export async function listCmd(opts: { json?: boolean }): Promise<void> {
   const agents: Array<{ agent_id: string; kind: string }> = [];
 
   for (const entry of entries) {
-    const dir = join(baseDir, entry);
-    const configPath = join(dir, 'config.yaml');
+    const dir = path.join(baseDir, entry);
+    const configPath = path.join(dir, 'config.yaml');
     if (!existsSync(configPath)) continue;
     try {
       const config = await loadConfig(dir);

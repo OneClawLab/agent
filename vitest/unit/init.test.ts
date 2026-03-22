@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm, readFile, stat } from 'node:fs/promises';
-import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { path } from '../../src/repo-utils/path.js';
 
 // Mock execCommand so `thread init` is never actually invoked
 vi.mock('../../src/repo-utils/os.js', () => ({
@@ -29,7 +29,7 @@ const mockExecCommand = vi.mocked(execCommand);
 const { initCmd } = await import('../../src/commands/init.js');
 
 beforeEach(async () => {
-  tmpBase = await mkdtemp(join(tmpdir(), 'agent-init-test-'));
+  tmpBase = path.resolve(await mkdtemp(path.join(path.resolve(tmpdir()), 'agent-init-test-')));
   mockExecCommand.mockClear();
 });
 
@@ -38,7 +38,7 @@ afterEach(async () => {
 });
 
 function agentDir(id: string) {
-  return join(tmpBase, '.theclaw', 'agents', id);
+  return path.join(tmpBase, '.theclaw', 'agents', id);
 }
 
 async function isDir(p: string): Promise<boolean> {
@@ -60,15 +60,15 @@ describe('initCmd - directory structure', () => {
       'inbox',
       'sessions',
       'memory',
-      join('threads', 'peers'),
-      join('threads', 'channels'),
-      join('threads', 'main'),
+      path.join('threads', 'peers'),
+      path.join('threads', 'channels'),
+      path.join('threads', 'main'),
       'workdir',
       'logs',
     ];
 
     for (const sub of expectedDirs) {
-      expect(await isDir(join(dir, sub))).toBe(true);
+      expect(await isDir(path.join(dir, sub))).toBe(true);
     }
   });
 });
@@ -78,21 +78,21 @@ describe('initCmd - directory structure', () => {
 describe('initCmd - default files', () => {
   it('generates IDENTITY.md with agent id', async () => {
     await initCmd('myagent', { kind: 'user' });
-    const content = await readFile(join(agentDir('myagent'), 'IDENTITY.md'), 'utf8');
+    const content = await readFile(path.join(agentDir('myagent'), 'IDENTITY.md'), 'utf8');
     expect(content).toContain('# myagent');
     expect(content).toContain('You are myagent');
   });
 
   it('generates USAGE.md', async () => {
     await initCmd('myagent', { kind: 'user' });
-    const content = await readFile(join(agentDir('myagent'), 'USAGE.md'), 'utf8');
+    const content = await readFile(path.join(agentDir('myagent'), 'USAGE.md'), 'utf8');
     expect(content).toContain('# Usage');
     expect(content).toContain('inbox');
   });
 
   it('generates config.yaml with correct agent_id and kind=user', async () => {
     await initCmd('myagent', { kind: 'user' });
-    const content = await readFile(join(agentDir('myagent'), 'config.yaml'), 'utf8');
+    const content = await readFile(path.join(agentDir('myagent'), 'config.yaml'), 'utf8');
     expect(content).toContain('agent_id: myagent');
     expect(content).toContain('kind: user');
     expect(content).toContain('provider: openai');
@@ -103,13 +103,13 @@ describe('initCmd - default files', () => {
 
   it('generates config.yaml with kind=system when specified', async () => {
     await initCmd('sysagent', { kind: 'system' });
-    const content = await readFile(join(agentDir('sysagent'), 'config.yaml'), 'utf8');
+    const content = await readFile(path.join(agentDir('sysagent'), 'config.yaml'), 'utf8');
     expect(content).toContain('kind: system');
   });
 
   it('config.yaml inbox path references the agent id', async () => {
     await initCmd('myagent', { kind: 'user' });
-    const content = await readFile(join(agentDir('myagent'), 'config.yaml'), 'utf8');
+    const content = await readFile(path.join(agentDir('myagent'), 'config.yaml'), 'utf8');
     expect(content).toContain('myagent/inbox');
   });
 });
@@ -119,7 +119,7 @@ describe('initCmd - default files', () => {
 describe('initCmd - thread init', () => {
   it('calls thread init --thread <agentDir>/inbox', async () => {
     await initCmd('myagent', { kind: 'user' });
-    const expectedInbox = join(agentDir('myagent'), 'inbox');
+    const expectedInbox = path.join(agentDir('myagent'), 'inbox');
     expect(mockExecCommand).toHaveBeenCalledWith('thread', ['init', '--thread', expectedInbox]);
   });
 });
@@ -168,7 +168,7 @@ describe('initCmd - already exists', () => {
 describe('initCmd - default kind', () => {
   it('defaults to kind=user when not specified', async () => {
     await initCmd('myagent', { kind: 'user' });
-    const content = await readFile(join(agentDir('myagent'), 'config.yaml'), 'utf8');
+    const content = await readFile(path.join(agentDir('myagent'), 'config.yaml'), 'utf8');
     expect(content).toContain('kind: user');
   });
 });

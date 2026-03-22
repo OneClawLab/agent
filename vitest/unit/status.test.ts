@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { path } from '../../src/repo-utils/path.js';
 
 // Mock homedir so agent dirs land in a tmp directory
 let tmpBase: string;
@@ -18,22 +18,22 @@ const { statusCmd } = await import('../../src/commands/status.js');
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function agentDir(id: string) {
-  return join(tmpBase, '.theclaw', 'agents', id);
+  return path.join(tmpBase, '.theclaw', 'agents', id);
 }
 
 async function createAgent(id: string, kind = 'user') {
   const dir = agentDir(id);
-  await mkdir(join(dir, 'logs'), { recursive: true });
-  await mkdir(join(dir, 'inbox'), { recursive: true });
+  await mkdir(path.join(dir, 'logs'), { recursive: true });
+  await mkdir(path.join(dir, 'inbox'), { recursive: true });
   await writeFile(
-    join(dir, 'config.yaml'),
-    `agent_id: ${id}\nkind: ${kind}\npai:\n  provider: openai\n  model: gpt-4o\ninbox:\n  path: ${join(dir, 'inbox')}\nrouting:\n  default: per-peer\noutbound: []\n`
+    path.join(dir, 'config.yaml'),
+    `agent_id: ${id}\nkind: ${kind}\npai:\n  provider: openai\n  model: gpt-4o\ninbox:\n  path: ${path.join(dir, 'inbox')}\nrouting:\n  default: per-peer\noutbound: []\n`
   );
   return dir;
 }
 
 beforeEach(async () => {
-  tmpBase = await mkdtemp(join(tmpdir(), 'agent-status-test-'));
+  tmpBase = path.resolve(await mkdtemp(path.join(path.resolve(tmpdir()), 'agent-status-test-')));
 });
 
 afterEach(async () => {
@@ -108,7 +108,7 @@ describe('statusCmd - human output', () => {
 
   it('shows started=yes when run.lock exists', async () => {
     const dir = await createAgent('myagent');
-    await writeFile(join(dir, 'run.lock'), '');
+    await writeFile(path.join(dir, 'run.lock'), '');
     const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     try {
@@ -122,13 +122,12 @@ describe('statusCmd - human output', () => {
 
   it('shows last_activity from log file mtime', async () => {
     const dir = await createAgent('myagent');
-    await writeFile(join(dir, 'logs', 'agent.log'), 'some log\n');
+    await writeFile(path.join(dir, 'logs', 'agent.log'), 'some log\n');
     const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     try {
       await statusCmd('myagent', {});
       const output = stdoutSpy.mock.calls.map(c => c[0]).join('');
-      // Should contain an ISO date string
       expect(output).toMatch(/\d{4}-\d{2}-\d{2}T/);
     } finally {
       stdoutSpy.mockRestore();
@@ -185,7 +184,7 @@ describe('statusCmd - JSON output', () => {
 
   it('JSON started=true when run.lock exists', async () => {
     const dir = await createAgent('myagent');
-    await writeFile(join(dir, 'run.lock'), '');
+    await writeFile(path.join(dir, 'run.lock'), '');
     const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     try {

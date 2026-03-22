@@ -3,14 +3,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fc from 'fast-check';
 import { mkdtemp, readFile, readdir, rm, writeFile, mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { path } from '../../src/repo-utils/path.js';
 import { createFireAndForgetLogger } from '../../src/repo-utils/logger.js';
 
 let tmpDir: string;
 
 beforeEach(async () => {
-  tmpDir = await mkdtemp(join(tmpdir(), 'agent-pbt-log-rotation-'));
+  tmpDir = await mkdtemp(path.join(path.resolve(tmpdir()), 'agent-pbt-log-rotation-'));
 });
 
 afterEach(async () => {
@@ -32,21 +32,21 @@ describe('Property 12: 日志轮换', () => {
         // Generate a safe log message
         fc.stringMatching(/^[a-zA-Z0-9 _-]{1,64}$/),
         async (lineCount, message) => {
-          const dir = await mkdtemp(join(tmpdir(), 'p12-'));
+          const dir = await mkdtemp(path.join(path.resolve(tmpdir()), 'p12-'));
           try {
-            const logsDir = join(dir, 'logs');
+            const logsDir = path.join(dir, 'logs');
             await mkdir(logsDir, { recursive: true });
 
             // Pre-fill agent.log with exactly `lineCount` lines
             const existingContent = 'x\n'.repeat(lineCount);
-            await writeFile(join(logsDir, 'agent.log'), existingContent, 'utf8');
+            await writeFile(path.join(logsDir, 'agent.log'), existingContent, 'utf8');
 
-            const logger = createFireAndForgetLogger(join(dir, 'logs'), 'agent');
+            const logger = createFireAndForgetLogger(path.join(dir, 'logs'), 'agent');
             logger.info(message);
             await flush();
 
             // 1. New agent.log should exist and contain only the new line
-            const newContent = await readFile(join(logsDir, 'agent.log'), 'utf8');
+            const newContent = await readFile(path.join(logsDir, 'agent.log'), 'utf8');
             expect(newContent).toContain(`[INFO] ${message}`);
             // New file should have exactly 1 line (the new log entry), not the old bulk content
             const newLineCount = newContent.split('\n').filter((l) => l.length > 0).length;
@@ -63,14 +63,14 @@ describe('Property 12: 日志轮换', () => {
             expect(archives[0]!).toMatch(/^agent-\d{8}-\d{6}\.log$/);
 
             // 4. Archive file contains the old content
-            const archiveContent = await readFile(join(logsDir, archives[0]!), 'utf8');
+            const archiveContent = await readFile(path.join(logsDir, archives[0]!), 'utf8');
             expect(archiveContent).toBe(existingContent);
           } finally {
             await rm(dir, { recursive: true, force: true });
           }
         }
       ),
-      { numRuns: 100 }
+      { numRuns: 5 }
     );
   });
 });

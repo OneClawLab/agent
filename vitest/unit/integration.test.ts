@@ -4,10 +4,10 @@
  * Requirements: 1.1-1.6, 2.1-2.3, 4.1-4.10, 7.1-7.6, 10.1-10.3
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { path } from '../../src/repo-utils/path.js';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -88,7 +88,7 @@ const { listCmd } = await import('../../src/commands/status.js');
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function agentDir(id: string) {
-  return join(tmpBase, '.theclaw', 'agents', id);
+  return path.join(tmpBase, '.theclaw', 'agents', id);
 }
 
 function makeInboxMessage(overrides: Record<string, unknown> = {}) {
@@ -110,11 +110,11 @@ function makeInboxMessage(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(async () => {
-  tmpBase = await mkdtemp(join(tmpdir(), 'agent-integration-test-'));
+  tmpBase = path.resolve(await mkdtemp(path.join(path.resolve(tmpdir()), 'agent-integration-test-')));
   vi.clearAllMocks();
   mockExecCommand.mockResolvedValue({ stdout: '', stderr: '' });
   mockConsumeMessages.mockResolvedValue([]);
-  mockRouteMessage.mockResolvedValue({ threadPath: join(tmpBase, 'thread'), isNew: false });
+  mockRouteMessage.mockResolvedValue({ threadPath: path.join(tmpBase, 'thread'), isNew: false });
   mockInvokeLlm.mockResolvedValue({ reply: 'Hello from agent!' });
   mockPushMessage.mockResolvedValue('evt-msg-1');
   mockPushReply.mockResolvedValue('evt-reply-1');
@@ -133,17 +133,17 @@ describe('Integration: init → start → run → deliver', () => {
 
     // Core directories exist
     for (const sub of ['inbox', 'sessions', 'memory', 'logs', 'workdir']) {
-      expect(existsSync(join(dir, sub))).toBe(true);
+      expect(existsSync(path.join(dir, sub))).toBe(true);
     }
     // Thread subdirs
     for (const sub of ['peers', 'channels', 'main']) {
-      expect(existsSync(join(dir, 'threads', sub))).toBe(true);
+      expect(existsSync(path.join(dir, 'threads', sub))).toBe(true);
     }
   });
 
   it('init generates valid config.yaml', async () => {
     await initCmd('bot', { kind: 'user' });
-    const config = await readFile(join(agentDir('bot'), 'config.yaml'), 'utf8');
+    const config = await readFile(path.join(agentDir('bot'), 'config.yaml'), 'utf8');
     expect(config).toContain('agent_id: bot');
     expect(config).toContain('kind: user');
     expect(config).toContain('provider: openai');
@@ -153,7 +153,7 @@ describe('Integration: init → start → run → deliver', () => {
   it('init calls thread init for inbox', async () => {
     await initCmd('bot', { kind: 'user' });
     expect(mockExecCommand).toHaveBeenCalledWith('thread', [
-      'init', '--thread', join(agentDir('bot'), 'inbox'),
+      'init', '--thread', path.join(agentDir('bot'), 'inbox'),
     ]);
   });
 
@@ -206,14 +206,14 @@ describe('Integration: init → start → run → deliver', () => {
     mockConsumeMessages.mockResolvedValue([makeInboxMessage()]);
     await runCmd('bot');
 
-    expect(existsSync(join(agentDir('bot'), 'run.lock'))).toBe(false);
+    expect(existsSync(path.join(agentDir('bot'), 'run.lock'))).toBe(false);
   });
 
   it('deliver pops and routes outbound events', async () => {
     await initCmd('bot', { kind: 'user' });
     await startCmd('bot');
 
-    const threadPath = join(agentDir('bot'), 'threads', 'peers', 'telegram-user42');
+    const threadPath = path.join(agentDir('bot'), 'threads', 'peers', 'telegram-user42');
     const events = [{
       eventId: 'out-1',
       content: {
@@ -280,7 +280,7 @@ describe('Integration: status output', () => {
 
   it('status shows started=yes while run.lock exists', async () => {
     await initCmd('bot', { kind: 'user' });
-    await writeFile(join(agentDir('bot'), 'run.lock'), '');
+    await writeFile(path.join(agentDir('bot'), 'run.lock'), '');
     stdoutSpy.mockClear();
     await statusCmd('bot', {});
     const output = stdoutSpy.mock.calls.map((c: unknown[]) => c[0]).join('');

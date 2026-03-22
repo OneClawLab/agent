@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { writeFile, unlink, mkdir } from 'node:fs/promises';
-import { join, basename } from 'node:path';
 import { homedir } from 'node:os';
+import { path } from '../repo-utils/path.js';
 import { loadConfig } from '../config.js';
 import { buildSystemPrompt } from '../identity.js';
 import { createFireAndForgetLogger, type Logger } from '../repo-utils/logger.js';
@@ -17,7 +17,7 @@ import type { ReplyContext } from '../types.js';
  * Resolve the agent directory path: ~/.theclaw/agents/<id>/
  */
 function agentDir(id: string): string {
-  return join(homedir(), '.theclaw', 'agents', id);
+  return path.join(path.toPosixPath(homedir()), '.theclaw', 'agents', id);
 }
 
 /**
@@ -63,11 +63,11 @@ async function compressThreadMemory(
   model: string,
   logger: Logger
 ): Promise<void> {
-  const memoryPath = join(agentDir, 'memory', `thread-${threadId}.md`);
-  const summarySessionFile = join(agentDir, 'sessions', `compress-${threadId}.jsonl`);
-  const systemPromptFile = join(agentDir, 'sessions', `system-compress.md`);
+  const memoryPath = path.join(agentDir, 'memory', `thread-${threadId}.md`);
+  const summarySessionFile = path.join(agentDir, 'sessions', `compress-${threadId}.jsonl`);
+  const systemPromptFile = path.join(agentDir, 'sessions', `system-compress.md`);
 
-  await mkdir(join(agentDir, 'sessions'), { recursive: true });
+  await mkdir(path.join(agentDir, 'sessions'), { recursive: true });
   await writeFile(
     systemPromptFile,
     'You are a memory compression assistant. Summarise the conversation history concisely, preserving key facts and context.'
@@ -84,7 +84,7 @@ async function compressThreadMemory(
       userMessage: 'Please summarise the conversation history above into a concise memory summary.',
     });
 
-    await mkdir(join(agentDir, 'memory'), { recursive: true });
+    await mkdir(path.join(agentDir, 'memory'), { recursive: true });
     await writeFile(memoryPath, result.reply, 'utf8');
     logger.info(`Thread memory compressed for ${threadId}`);
   } catch (err) {
@@ -138,8 +138,8 @@ export async function runCmd(id: string): Promise<void> {
     process.exit(1);
   }
 
-  const logger = createFireAndForgetLogger(join(dir, 'logs'), 'agent');
-  const lockPath = join(dir, 'run.lock');
+  const logger = createFireAndForgetLogger(path.join(dir, 'logs'), 'agent');
+  const lockPath = path.join(dir, 'run.lock');
 
   // Requirement 4.10: acquire file lock
   let locked = false;
@@ -194,7 +194,7 @@ export async function runCmd(id: string): Promise<void> {
         peerId
       );
 
-      const threadId = basename(threadPath);
+      const threadId = path.basename(threadPath);
       logger.info(`Routed to thread ${threadPath} (isNew=${isNew})`);
 
       // Requirement 4.4: push inbound message preserving original source
@@ -211,8 +211,8 @@ export async function runCmd(id: string): Promise<void> {
       }
 
       // Write system prompt to temp file for pai chat
-      await mkdir(join(dir, 'sessions'), { recursive: true });
-      const systemPromptFile = join(dir, 'sessions', `system-prompt-${threadId}.md`);
+      await mkdir(path.join(dir, 'sessions'), { recursive: true });
+      const systemPromptFile = path.join(dir, 'sessions', `system-prompt-${threadId}.md`);
       await writeFile(systemPromptFile, systemPrompt, 'utf8');
 
       // Requirement 6.1: session file path

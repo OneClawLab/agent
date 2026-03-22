@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { path } from '../../src/repo-utils/path.js';
 
 // Mock homedir so agent dirs land in a tmp directory
 let tmpBase: string;
@@ -18,22 +18,22 @@ const { listCmd } = await import('../../src/commands/status.js');
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function agentsBase() {
-  return join(tmpBase, '.theclaw', 'agents');
+  return path.join(tmpBase, '.theclaw', 'agents');
 }
 
 async function createAgent(id: string, kind = 'user') {
-  const dir = join(agentsBase(), id);
-  await mkdir(join(dir, 'logs'), { recursive: true });
-  await mkdir(join(dir, 'inbox'), { recursive: true });
+  const dir = path.join(agentsBase(), id);
+  await mkdir(path.join(dir, 'logs'), { recursive: true });
+  await mkdir(path.join(dir, 'inbox'), { recursive: true });
   await writeFile(
-    join(dir, 'config.yaml'),
-    `agent_id: ${id}\nkind: ${kind}\npai:\n  provider: openai\n  model: gpt-4o\ninbox:\n  path: ${join(dir, 'inbox')}\nrouting:\n  default: per-peer\noutbound: []\n`
+    path.join(dir, 'config.yaml'),
+    `agent_id: ${id}\nkind: ${kind}\npai:\n  provider: openai\n  model: gpt-4o\ninbox:\n  path: ${path.join(dir, 'inbox')}\nrouting:\n  default: per-peer\noutbound: []\n`
   );
   return dir;
 }
 
 beforeEach(async () => {
-  tmpBase = await mkdtemp(join(tmpdir(), 'agent-list-test-'));
+  tmpBase = path.resolve(await mkdtemp(path.join(path.resolve(tmpdir()), 'agent-list-test-')));
 });
 
 afterEach(async () => {
@@ -118,8 +118,7 @@ describe('listCmd - human output', () => {
 
   it('skips directories without config.yaml', async () => {
     await createAgent('alice');
-    // Create a dir without config.yaml
-    await mkdir(join(agentsBase(), 'orphan'), { recursive: true });
+    await mkdir(path.join(agentsBase(), 'orphan'), { recursive: true });
     const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     try {

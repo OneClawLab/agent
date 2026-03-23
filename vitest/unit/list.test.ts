@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
+import * as fs from '../../src/repo-utils/fs.js';
 import { tmpdir } from 'node:os';
 import { path } from '../../src/repo-utils/path.js';
 
@@ -23,9 +23,9 @@ function agentsBase() {
 
 async function createAgent(id: string, kind = 'user') {
   const dir = path.join(agentsBase(), id);
-  await mkdir(path.join(dir, 'logs'), { recursive: true });
-  await mkdir(path.join(dir, 'inbox'), { recursive: true });
-  await writeFile(
+  await fs.mkdir(path.join(dir, 'logs'), { recursive: true });
+  await fs.mkdir(path.join(dir, 'inbox'), { recursive: true });
+  await fs.writeFile(
     path.join(dir, 'config.yaml'),
     `agent_id: ${id}\nkind: ${kind}\npai:\n  provider: openai\n  model: gpt-4o\ninbox:\n  path: ${path.join(dir, 'inbox')}\nrouting:\n  default: per-peer\noutbound: []\n`
   );
@@ -33,11 +33,11 @@ async function createAgent(id: string, kind = 'user') {
 }
 
 beforeEach(async () => {
-  tmpBase = path.resolve(await mkdtemp(path.join(path.resolve(tmpdir()), 'agent-list-test-')));
+  tmpBase = path.resolve(await fs.mkdtemp(path.join(path.toPosixPath(tmpdir()), 'agent-list-test-')));
 });
 
 afterEach(async () => {
-  await rm(tmpBase, { recursive: true, force: true });
+  await fs.rm(tmpBase, { recursive: true, force: true });
 });
 
 // ── Empty / no agents ─────────────────────────────────────────────────────────
@@ -70,7 +70,7 @@ describe('listCmd - no agents', () => {
   });
 
   it('outputs "No agents found" when base dir exists but is empty', async () => {
-    await mkdir(agentsBase(), { recursive: true });
+    await fs.mkdir(agentsBase(), { recursive: true });
     const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     try {
@@ -118,7 +118,7 @@ describe('listCmd - human output', () => {
 
   it('skips directories without config.yaml', async () => {
     await createAgent('alice');
-    await mkdir(path.join(agentsBase(), 'orphan'), { recursive: true });
+    await fs.mkdir(path.join(agentsBase(), 'orphan'), { recursive: true });
     const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     try {

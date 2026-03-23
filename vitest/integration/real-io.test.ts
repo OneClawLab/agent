@@ -4,8 +4,7 @@
  * Only execCommand (thread/xgw calls) is mocked to avoid external dependencies.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
-import { existsSync, writeFileSync } from 'node:fs';
+import * as fs from '../../src/repo-utils/fs.js';
 import { tmpdir } from 'node:os';
 import { path } from '../../src/repo-utils/path.js';
 
@@ -47,14 +46,14 @@ function agentDir(id: string) {
 let stdoutSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(async () => {
-  tmpBase = path.resolve(await mkdtemp(path.join(path.toPosixPath(tmpdir()), 'agent-real-io-')));
+  tmpBase = path.resolve(await fs.mkdtemp(path.join(path.toPosixPath(tmpdir()), 'agent-real-io-')));
   mockExec.mockResolvedValue({ stdout: '', stderr: '' });
   stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 });
 
 afterEach(async () => {
   stdoutSpy.mockRestore();
-  await rm(tmpBase, { recursive: true, force: true });
+  await fs.rm(tmpBase, { recursive: true, force: true });
 });
 
 // ── init: real directory structure ────────────────────────────────────────────
@@ -65,10 +64,10 @@ describe('initCmd: real directory creation', () => {
     const dir = agentDir('mybot');
 
     for (const sub of ['inbox', 'sessions', 'memory', 'logs', 'workdir']) {
-      expect(existsSync(path.join(dir, sub))).toBe(true);
+      expect(fs.existsSync(path.join(dir, sub))).toBe(true);
     }
     for (const sub of ['peers', 'channels', 'main']) {
-      expect(existsSync(path.join(dir, 'threads', sub))).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'threads', sub))).toBe(true);
     }
   });
 
@@ -95,8 +94,8 @@ describe('initCmd: real directory creation', () => {
   it('writes IDENTITY.md and USAGE.md', async () => {
     await initCmd('mybot', { kind: 'user' });
     const dir = agentDir('mybot');
-    expect(existsSync(path.join(dir, 'IDENTITY.md'))).toBe(true);
-    expect(existsSync(path.join(dir, 'USAGE.md'))).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'IDENTITY.md'))).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'USAGE.md'))).toBe(true);
   });
 
   it('calls thread init for inbox', async () => {
@@ -125,8 +124,8 @@ describe('initCmd: real directory creation', () => {
 describe('loadConfig: real YAML parsing', () => {
   it('parses a hand-written config.yaml correctly', async () => {
     const dir = path.join(path.toPosixPath(tmpBase), 'custom-agent');
-    await mkdir(dir, { recursive: true });
-    await writeFile(path.join(dir, 'config.yaml'), `
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, 'config.yaml'), `
 agent_id: custom
 kind: user
 pai:
@@ -148,8 +147,8 @@ outbound: []
 
   it('applies default routing.default=per-peer when missing', async () => {
     const dir = path.join(path.toPosixPath(tmpBase), 'minimal-agent');
-    await mkdir(dir, { recursive: true });
-    await writeFile(path.join(dir, 'config.yaml'), `
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, 'config.yaml'), `
 agent_id: minimal
 kind: user
 pai:
@@ -164,8 +163,8 @@ inbox:
 
   it('applies default retry/deliver max_attempts=3 when missing', async () => {
     const dir = path.join(path.toPosixPath(tmpBase), 'minimal-agent2');
-    await mkdir(dir, { recursive: true });
-    await writeFile(path.join(dir, 'config.yaml'), `
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, 'config.yaml'), `
 agent_id: minimal
 kind: user
 pai:
@@ -181,15 +180,15 @@ inbox:
 
   it('throws descriptive error when config.yaml is missing', async () => {
     const dir = path.join(path.toPosixPath(tmpBase), 'no-config');
-    await mkdir(dir, { recursive: true });
+    await fs.mkdir(dir, { recursive: true });
     await expect(loadConfig(dir)).rejects.toThrow(/not found/i);
     await expect(loadConfig(dir)).rejects.toThrow('config.yaml');
   });
 
   it('throws descriptive error on invalid YAML', async () => {
     const dir = path.join(path.toPosixPath(tmpBase), 'bad-yaml');
-    await mkdir(dir, { recursive: true });
-    await writeFile(path.join(dir, 'config.yaml'), '{ invalid: yaml: content: [}');
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, 'config.yaml'), '{ invalid: yaml: content: [}');
     await expect(loadConfig(dir)).rejects.toThrow(/invalid yaml/i);
   });
 });
@@ -263,7 +262,7 @@ describe('statusCmd: real file system checks', () => {
   it('returns started=true when run.lock exists', async () => {
     await initCmd('mybot', { kind: 'user' });
     // Write lock file at the posix path that initCmd created
-    writeFileSync(path.join(agentDir('mybot'), 'run.lock'), '');
+    fs.writeFileSync(path.join(agentDir('mybot'), 'run.lock'), '');
     stdoutSpy.mockClear();
 
     await statusCmd('mybot', { json: true });
@@ -348,7 +347,7 @@ describe('listCmd: real directory scan', () => {
 
   it('skips directories without config.yaml', async () => {
     // Create a stray directory that is not an agent
-    await mkdir(path.join(path.toPosixPath(tmpBase), '.theclaw', 'agents', 'stray'), { recursive: true });
+    await fs.mkdir(path.join(path.toPosixPath(tmpBase), '.theclaw', 'agents', 'stray'), { recursive: true });
     await initCmd('real', { kind: 'user' });
     stdoutSpy.mockClear();
 

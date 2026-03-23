@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import * as fs from '../../src/repo-utils/fs.js';
+import { path } from '../../src/repo-utils/path.js';
 import { tmpdir } from 'node:os';
 
 // Mock execCommand so `thread unsubscribe` is never actually invoked
@@ -30,27 +30,27 @@ const { stopCmd } = await import('../../src/commands/stop.js');
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function agentDir(id: string) {
-  return join(tmpBase, '.theclaw', 'agents', id);
+  return path.join(tmpBase, '.theclaw', 'agents', id);
 }
 
 async function createAgent(id: string, inboxPath?: string) {
   const dir = agentDir(id);
-  await mkdir(join(dir, 'logs'), { recursive: true });
-  const resolvedInbox = inboxPath ?? join(dir, 'inbox');
-  await writeFile(
-    join(dir, 'config.yaml'),
+  await fs.mkdir(path.join(dir, 'logs'), { recursive: true });
+  const resolvedInbox = inboxPath ?? path.join(dir, 'inbox');
+  await fs.writeFile(
+    path.join(dir, 'config.yaml'),
     `agent_id: ${id}\nkind: user\npai:\n  provider: openai\n  model: gpt-4o\ninbox:\n  path: ${resolvedInbox}\nrouting:\n  default: per-peer\noutbound: []\n`
   );
   return dir;
 }
 
 beforeEach(async () => {
-  tmpBase = await mkdtemp(join(tmpdir(), 'agent-stop-test-'));
+  tmpBase = await fs.mkdtemp(path.join(path.toPosixPath(tmpdir()), 'agent-stop-test-'));
   mockExecCommand.mockClear();
 });
 
 afterEach(async () => {
-  await rm(tmpBase, { recursive: true, force: true });
+  await fs.rm(tmpBase, { recursive: true, force: true });
 });
 
 // ── Agent not found ───────────────────────────────────────────────────────────
@@ -104,7 +104,7 @@ describe('stopCmd - agent not found', () => {
 describe('stopCmd - successful stop', () => {
   it('calls thread unsubscribe with correct arguments', async () => {
     const dir = await createAgent('myagent');
-    const inboxPath = join(dir, 'inbox');
+    const inboxPath = path.join(dir, 'inbox');
 
     await stopCmd('myagent');
 
@@ -116,7 +116,7 @@ describe('stopCmd - successful stop', () => {
   });
 
   it('uses inbox path from config', async () => {
-    const customInbox = join(tmpBase, 'custom', 'inbox');
+    const customInbox = path.join(tmpBase, 'custom', 'inbox');
     await createAgent('myagent', customInbox);
 
     await stopCmd('myagent');

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import * as fs from '../../src/repo-utils/fs.js';
+import { path } from '../../src/repo-utils/path.js';
 import { tmpdir } from 'node:os';
 import { resolveThreadPath, routeMessage } from '../../src/runner/router.js';
 
@@ -15,12 +15,12 @@ const mockExecCommand = vi.mocked(execCommand);
 let tmpDir: string;
 
 beforeEach(async () => {
-  tmpDir = await mkdtemp(join(tmpdir(), 'agent-router-test-'));
+  tmpDir = await fs.mkdtemp(path.join(path.toPosixPath(tmpdir()), 'agent-router-test-'));
   mockExecCommand.mockClear();
 });
 
 afterEach(async () => {
-  await rm(tmpDir, { recursive: true, force: true });
+  await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
 // ── resolveThreadPath ────────────────────────────────────────────────────────
@@ -28,17 +28,17 @@ afterEach(async () => {
 describe('resolveThreadPath', () => {
   it('per-peer → threads/peers/<channelId>-<peerId>', () => {
     const result = resolveThreadPath('/agents/bot', 'per-peer', 'tg', 'user42');
-    expect(result).toBe(join('/agents/bot', 'threads', 'peers', 'tg-user42'));
+    expect(result).toBe(path.join('/agents/bot', 'threads', 'peers', 'tg-user42'));
   });
 
   it('per-channel → threads/channels/<channelId>', () => {
     const result = resolveThreadPath('/agents/bot', 'per-channel', 'tg', 'user42');
-    expect(result).toBe(join('/agents/bot', 'threads', 'channels', 'tg'));
+    expect(result).toBe(path.join('/agents/bot', 'threads', 'channels', 'tg'));
   });
 
   it('per-agent → threads/main', () => {
     const result = resolveThreadPath('/agents/bot', 'per-agent', 'tg', 'user42');
-    expect(result).toBe(join('/agents/bot', 'threads', 'main'));
+    expect(result).toBe(path.join('/agents/bot', 'threads', 'main'));
   });
 
   it('per-agent ignores channelId and peerId', () => {
@@ -67,18 +67,17 @@ describe('routeMessage', () => {
     const result = await routeMessage(tmpDir, 'per-peer', 'tg', 'user1');
 
     expect(result.isNew).toBe(true);
-    expect(result.threadPath).toBe(join(tmpDir, 'threads', 'peers', 'tg-user1'));
+    expect(result.threadPath).toBe(path.join(tmpDir, 'threads', 'peers', 'tg-user1'));
     expect(mockExecCommand).toHaveBeenCalledOnce();
     expect(mockExecCommand).toHaveBeenCalledWith('thread', [
       'init',
-      '--thread',
-      join(tmpDir, 'threads', 'peers', 'tg-user1'),
+      path.join(tmpDir, 'threads', 'peers', 'tg-user1'),
     ]);
   });
 
   it('returns isNew=false and does NOT call thread init when directory exists', async () => {
-    const threadPath = join(tmpDir, 'threads', 'peers', 'tg-user2');
-    await mkdir(threadPath, { recursive: true });
+    const threadPath = path.join(tmpDir, 'threads', 'peers', 'tg-user2');
+    await fs.mkdir(threadPath, { recursive: true });
 
     const result = await routeMessage(tmpDir, 'per-peer', 'tg', 'user2');
 
@@ -90,21 +89,21 @@ describe('routeMessage', () => {
   it('per-channel routes to channels/<channelId>', async () => {
     const result = await routeMessage(tmpDir, 'per-channel', 'slack', 'anyone');
 
-    expect(result.threadPath).toBe(join(tmpDir, 'threads', 'channels', 'slack'));
+    expect(result.threadPath).toBe(path.join(tmpDir, 'threads', 'channels', 'slack'));
     expect(result.isNew).toBe(true);
   });
 
   it('per-agent routes to threads/main', async () => {
     const result = await routeMessage(tmpDir, 'per-agent', 'any', 'any');
 
-    expect(result.threadPath).toBe(join(tmpDir, 'threads', 'main'));
+    expect(result.threadPath).toBe(path.join(tmpDir, 'threads', 'main'));
     expect(result.isNew).toBe(true);
   });
 
   it('second call to same thread returns isNew=false after directory is created', async () => {
     // Simulate first call creating the directory
-    const threadPath = join(tmpDir, 'threads', 'main');
-    await mkdir(threadPath, { recursive: true });
+    const threadPath = path.join(tmpDir, 'threads', 'main');
+    await fs.mkdir(threadPath, { recursive: true });
 
     const result = await routeMessage(tmpDir, 'per-agent', 'any', 'any');
     expect(result.isNew).toBe(false);

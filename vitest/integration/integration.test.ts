@@ -4,8 +4,7 @@
  * Requirements: 1.1-1.6, 2.1-2.3, 4.1-4.10, 7.1-7.6, 10.1-10.3
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import * as fs from '../../src/repo-utils/fs.js';
 import { tmpdir } from 'node:os';
 import { path } from '../../src/repo-utils/path.js';
 
@@ -110,7 +109,7 @@ function makeInboxMessage(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(async () => {
-  tmpBase = path.resolve(await mkdtemp(path.join(path.resolve(tmpdir()), 'agent-integration-test-')));
+  tmpBase = path.resolve(await fs.mkdtemp(path.join(path.toPosixPath(tmpdir()), 'agent-integration-test-')));
   vi.clearAllMocks();
   mockExecCommand.mockResolvedValue({ stdout: '', stderr: '' });
   mockConsumeMessages.mockResolvedValue([]);
@@ -121,7 +120,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await rm(tmpBase, { recursive: true, force: true });
+  await fs.rm(tmpBase, { recursive: true, force: true });
 });
 
 // ── init → start → run → deliver flow ────────────────────────────────────────
@@ -133,17 +132,17 @@ describe('Integration: init → start → run → deliver', () => {
 
     // Core directories exist
     for (const sub of ['inbox', 'sessions', 'memory', 'logs', 'workdir']) {
-      expect(existsSync(path.join(dir, sub))).toBe(true);
+      expect(fs.existsSync(path.join(dir, sub))).toBe(true);
     }
     // Thread subdirs
     for (const sub of ['peers', 'channels', 'main']) {
-      expect(existsSync(path.join(dir, 'threads', sub))).toBe(true);
+      expect(fs.existsSync(path.join(dir, 'threads', sub))).toBe(true);
     }
   });
 
   it('init generates valid config.yaml', async () => {
     await initCmd('bot', { kind: 'user' });
-    const config = await readFile(path.join(agentDir('bot'), 'config.yaml'), 'utf8');
+    const config = await fs.readFile(path.join(agentDir('bot'), 'config.yaml'), 'utf8');
     expect(config).toContain('agent_id: bot');
     expect(config).toContain('kind: user');
     expect(config).toContain('provider: openai');
@@ -206,7 +205,7 @@ describe('Integration: init → start → run → deliver', () => {
     mockConsumeMessages.mockResolvedValue([makeInboxMessage()]);
     await runCmd('bot');
 
-    expect(existsSync(path.join(agentDir('bot'), 'run.lock'))).toBe(false);
+    expect(fs.existsSync(path.join(agentDir('bot'), 'run.lock'))).toBe(false);
   });
 
   it('deliver pops and routes outbound events', async () => {
@@ -280,7 +279,7 @@ describe('Integration: status output', () => {
 
   it('status shows started=yes while run.lock exists', async () => {
     await initCmd('bot', { kind: 'user' });
-    await writeFile(path.join(agentDir('bot'), 'run.lock'), '');
+    await fs.writeFile(path.join(agentDir('bot'), 'run.lock'), '');
     stdoutSpy.mockClear();
     await statusCmd('bot', {});
     const output = stdoutSpy.mock.calls.map((c: unknown[]) => c[0]).join('');

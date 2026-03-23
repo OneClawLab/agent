@@ -179,7 +179,8 @@ export async function runCmd(id: string): Promise<void> {
     logger.info(`Processing ${messages.length} inbox message(s)`);
 
     for (const message of messages) {
-      const content = message.content;
+      try {
+        const content = message.content;
       const replyContext = content.reply_context as ReplyContext | undefined;
       const channelId = replyContext?.channel_id ?? 'unknown';
       const peerId = replyContext?.peer_id ?? 'unknown';
@@ -274,6 +275,9 @@ export async function runCmd(id: string): Promise<void> {
         } catch (err) {
           logger.error(`Failed to register outbound consumer: ${(err as Error).message}`);
         }
+      }
+      } catch (err) {
+        logger.error(`Unhandled error processing message from ${message.source}: ${(err as Error).message}`);
       }
     }
 

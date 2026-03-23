@@ -1,6 +1,6 @@
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync } from '../repo-utils/fs.js';
 import { execCommand } from '../repo-utils/os.js';
+import { path } from '../repo-utils/path.js';
 import type { RoutingMode } from '../types.js';
 
 export type { RoutingMode };
@@ -25,11 +25,11 @@ export function resolveThreadPath(
 ): string {
   switch (mode) {
     case 'per-peer':
-      return join(agentDir, 'threads', 'peers', `${channelId}-${peerId}`);
+      return path.join(agentDir, 'threads', 'peers', `${channelId}-${peerId}`);
     case 'per-channel':
-      return join(agentDir, 'threads', 'channels', channelId);
+      return path.join(agentDir, 'threads', 'channels', channelId);
     case 'per-agent':
-      return join(agentDir, 'threads', 'main');
+      return path.join(agentDir, 'threads', 'main');
   }
 }
 
@@ -47,7 +47,7 @@ export async function routeMessage(
   const isNew = !existsSync(threadPath);
 
   if (isNew) {
-    await execCommand('thread', ['init', '--thread', threadPath]);
+    await execCommand('thread', ['init', threadPath]);
   }
 
   return { threadPath, isNew };

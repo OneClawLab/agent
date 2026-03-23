@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, readFile, stat } from 'node:fs/promises';
+import * as fs from '../../src/repo-utils/fs.js';
 import { tmpdir } from 'node:os';
 import { path } from '../../src/repo-utils/path.js';
 
@@ -29,12 +29,12 @@ const mockExecCommand = vi.mocked(execCommand);
 const { initCmd } = await import('../../src/commands/init.js');
 
 beforeEach(async () => {
-  tmpBase = path.resolve(await mkdtemp(path.join(path.resolve(tmpdir()), 'agent-init-test-')));
+  tmpBase = path.resolve(await fs.mkdtemp(path.join(path.toPosixPath(tmpdir()), 'agent-init-test-')));
   mockExecCommand.mockClear();
 });
 
 afterEach(async () => {
-  await rm(tmpBase, { recursive: true, force: true });
+  await fs.rm(tmpBase, { recursive: true, force: true });
 });
 
 function agentDir(id: string) {
@@ -43,7 +43,7 @@ function agentDir(id: string) {
 
 async function isDir(p: string): Promise<boolean> {
   try {
-    return (await stat(p)).isDirectory();
+    return (await fs.stat(p)).isDirectory();
   } catch {
     return false;
   }
@@ -78,21 +78,21 @@ describe('initCmd - directory structure', () => {
 describe('initCmd - default files', () => {
   it('generates IDENTITY.md with agent id', async () => {
     await initCmd('myagent', { kind: 'user' });
-    const content = await readFile(path.join(agentDir('myagent'), 'IDENTITY.md'), 'utf8');
+    const content = await fs.readFile(path.join(agentDir('myagent'), 'IDENTITY.md'), 'utf8');
     expect(content).toContain('# myagent');
     expect(content).toContain('You are myagent');
   });
 
   it('generates USAGE.md', async () => {
     await initCmd('myagent', { kind: 'user' });
-    const content = await readFile(path.join(agentDir('myagent'), 'USAGE.md'), 'utf8');
+    const content = await fs.readFile(path.join(agentDir('myagent'), 'USAGE.md'), 'utf8');
     expect(content).toContain('# Usage');
     expect(content).toContain('inbox');
   });
 
   it('generates config.yaml with correct agent_id and kind=user', async () => {
     await initCmd('myagent', { kind: 'user' });
-    const content = await readFile(path.join(agentDir('myagent'), 'config.yaml'), 'utf8');
+    const content = await fs.readFile(path.join(agentDir('myagent'), 'config.yaml'), 'utf8');
     expect(content).toContain('agent_id: myagent');
     expect(content).toContain('kind: user');
     expect(content).toContain('provider: openai');
@@ -103,13 +103,13 @@ describe('initCmd - default files', () => {
 
   it('generates config.yaml with kind=system when specified', async () => {
     await initCmd('sysagent', { kind: 'system' });
-    const content = await readFile(path.join(agentDir('sysagent'), 'config.yaml'), 'utf8');
+    const content = await fs.readFile(path.join(agentDir('sysagent'), 'config.yaml'), 'utf8');
     expect(content).toContain('kind: system');
   });
 
   it('config.yaml inbox path references the agent id', async () => {
     await initCmd('myagent', { kind: 'user' });
-    const content = await readFile(path.join(agentDir('myagent'), 'config.yaml'), 'utf8');
+    const content = await fs.readFile(path.join(agentDir('myagent'), 'config.yaml'), 'utf8');
     expect(content).toContain('myagent/inbox');
   });
 });
@@ -168,7 +168,7 @@ describe('initCmd - already exists', () => {
 describe('initCmd - default kind', () => {
   it('defaults to kind=user when not specified', async () => {
     await initCmd('myagent', { kind: 'user' });
-    const content = await readFile(path.join(agentDir('myagent'), 'config.yaml'), 'utf8');
+    const content = await fs.readFile(path.join(agentDir('myagent'), 'config.yaml'), 'utf8');
     expect(content).toContain('kind: user');
   });
 });

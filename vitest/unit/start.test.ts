@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
+import * as fs from '../../src/repo-utils/fs.js';
 import { tmpdir } from 'node:os';
 import { path } from '../../src/repo-utils/path.js';
 
@@ -45,9 +45,9 @@ function agentDir(id: string) {
 
 async function createAgent(id: string, inboxPath?: string) {
   const dir = agentDir(id);
-  await mkdir(path.join(dir, 'logs'), { recursive: true });
+  await fs.mkdir(path.join(dir, 'logs'), { recursive: true });
   const resolvedInbox = inboxPath ?? path.join(dir, 'inbox');
-  await writeFile(
+  await fs.writeFile(
     path.join(dir, 'config.yaml'),
     `agent_id: ${id}\nkind: user\npai:\n  provider: openai\n  model: gpt-4o\ninbox:\n  path: ${resolvedInbox}\nrouting:\n  default: per-peer\noutbound: []\n`
   );
@@ -55,7 +55,7 @@ async function createAgent(id: string, inboxPath?: string) {
 }
 
 beforeEach(async () => {
-  tmpBase = path.resolve(await mkdtemp(path.join(path.resolve(tmpdir()), 'agent-start-test-')));
+  tmpBase = path.resolve(await fs.mkdtemp(path.join(path.toPosixPath(tmpdir()), 'agent-start-test-')));
   mockExecCommand.mockClear();
   mockInfo.mockClear();
   mockError.mockClear();
@@ -63,7 +63,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await rm(tmpBase, { recursive: true, force: true });
+  await fs.rm(tmpBase, { recursive: true, force: true });
 });
 
 // ── Agent not found ───────────────────────────────────────────────────────────

@@ -30,10 +30,15 @@ section "Pre-flight"
 
 require_bin $AGENT "run npm run build"
 require_bin thread "run: cd ../thread && npm run release:local"
+require_bin notifier "run: cd ../notifier && npm run release:local"
 
 PROVIDER=$(pai model default --json 2>/dev/null | json_field_from_stdin "defaultProvider")
 if [[ -z "$PROVIDER" ]]; then fail "No default provider — run: pai model default --name <provider>"; exit 1; fi
 pass "Default provider: $PROVIDER"
+
+NOTIFIER_STATUS=$(notifier status --json 2>/dev/null | grep -o '"running":[^,}]*' | cut -d: -f2 | tr -d ' ')
+if [[ "$NOTIFIER_STATUS" != "true" ]]; then fail "notifier is not running — run: notifier start"; exit 1; fi
+pass "notifier is running"
 
 # ══════════════════════════════════════════════════════════════
 # 1. init
@@ -111,17 +116,55 @@ INBOX_COUNT=$(thread peek --thread "$AGENT_DIR/inbox" --last-event-id 0 2>/dev/n
 [[ "$INBOX_COUNT" -ge 1 ]] && pass "event in inbox (count: $INBOX_COUNT)" || fail "inbox empty after send"
 
 # ══════════════════════════════════════════════════════════════
-# 10. send — with subtype
+# 10. run — notifier dispatches agent run, reply appears in thread
 # ══════════════════════════════════════════════════════════════
-section "10. send — with subtype"
+section "10. run — notifier dispatches, reply in thread"
+
+AGENT_LOG="${AGENT_DIR}/logs/agent.log"
+NOTIFIER_HOME="${NOTIFIER_HOME:-$HOME/.local/share/notifier}"
+NOTIFIER_LOG="${NOTIFIER_HOME}/logs/notifier.log"
+THREAD_PATH="$AGENT_DIR/threads/peers/unknown-unknown"
+
+# CP1: inbox has the event (near-instant after send)
+wait_for "CP1: inbox has event" 5 \
+  'thread peek --thread "$AGENT_DIR/inbox" --last-event-id 0 2>/dev/null | grep -q .' \
+  -- "thread peek --thread \"$AGENT_DIR/inbox\" --last-event-id 0 2>/dev/null"
+
+# CP2: notifier has a dispatch task (pending or already done — notifier can be fast)
+wait_for "CP2: notifier dispatch task queued" 5 \
+  '{ notifier task list --status pending 2>/dev/null; notifier task list --status done 2>/dev/null; } | grep -q dispatch' \
+  -- "notifier task list --status pending 2>/dev/null" \
+     "notifier task list --status done 2>/dev/null | tail -10"
+
+# CP3: agent log shows agent run was invoked (thread dispatch spawned it)
+wait_for "CP3: agent run invoked" 15 \
+  'grep -q "run started" "$AGENT_LOG" 2>/dev/null' \
+  -- "tail -20 \"$AGENT_LOG\" 2>/dev/null || echo '(no agent log)'" \
+     "tail -10 \"$NOTIFIER_LOG\" 2>/dev/null || echo '(no notifier log)'"
+
+# CP4: thread directory created (agent run started processing)
+wait_for "CP4: thread dir created" 10 \
+  '[[ -d "$THREAD_PATH" ]]' \
+  -- "tail -30 \"$AGENT_LOG\" 2>/dev/null || echo '(no agent log)'"
+
+# CP5: reply written to thread (LLM call completed)
+wait_for "CP5: agent reply in thread" 60 \
+  'thread peek --thread "$THREAD_PATH" --last-event-id 0 2>/dev/null | grep -q "\"source\":\"self\""' \
+  -- "thread peek --thread \"$THREAD_PATH\" --last-event-id 0 2>/dev/null" \
+     "tail -30 \"$AGENT_LOG\" 2>/dev/null || echo '(no agent log)'"
+
+# ══════════════════════════════════════════════════════════════
+# 11. send — with subtype
+# ══════════════════════════════════════════════════════════════
+section "11. send — with subtype"
 run_cmd $AGENT send "$AID" --source "e2e" --type "record" --subtype "toolcall" \
   --content '{"tool":"bash","args":["echo hi"]}'
 assert_exit0
 
 # ══════════════════════════════════════════════════════════════
-# 11. stop
+# 12. stop
 # ══════════════════════════════════════════════════════════════
-section "11. stop"
+section "12. stop"
 run_cmd $AGENT stop "$AID"
 assert_exit0
 INBOX_INFO=$(thread info --thread "$AGENT_DIR/inbox" 2>/dev/null || true)
@@ -130,11 +173,11 @@ echo "$INBOX_INFO" | grep -q "^  - inbox" \
   || pass "inbox subscription removed"
 
 # ══════════════════════════════════════════════════════════════
-# 12. Error — operations on non-existent agent exit 1
+# 13. Error — operations on non-existent agent exit 1
 # ══════════════════════════════════════════════════════════════
-section "12. Error — operations on non-existent agent"
-run_cmd $AGENT start "no-such-agent-$"; assert_exit 1
-run_cmd $AGENT stop  "no-such-agent-$"; assert_exit 1
-run_cmd $AGENT status "no-such-agent-$"; assert_exit 1
+section "13. Error — operations on non-existent agent"
+run_cmd $AGENT start "no-such-agent-$$"; assert_exit 1
+run_cmd $AGENT stop  "no-such-agent-$$"; assert_exit 1
+run_cmd $AGENT status "no-such-agent-$$"; assert_exit 1
 
 summary_and_exit

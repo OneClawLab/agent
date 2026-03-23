@@ -21,9 +21,10 @@ describe('consumeMessages', () => {
 
     await consumeMessages(INBOX, CONSUMER);
 
-    expect(mockExecCommand).toHaveBeenCalledOnce();
+    // First call is thread info (to get lastEventId), second is thread pop
     expect(mockExecCommand).toHaveBeenCalledWith('thread', [
       'pop', '--thread', INBOX, '--consumer', CONSUMER,
+      '--last-event-id', '0',
     ]);
   });
 
@@ -38,24 +39,36 @@ describe('consumeMessages', () => {
     ]);
   });
 
+  it('skips thread info call when lastEventId is provided', async () => {
+    mockExecCommand.mockResolvedValue({ stdout: '[]', stderr: '' });
+
+    await consumeMessages(INBOX, CONSUMER, 'evt-42');
+
+    expect(mockExecCommand).toHaveBeenCalledOnce();
+    expect(mockExecCommand).toHaveBeenCalledWith('thread', [
+      'pop', '--thread', INBOX, '--consumer', CONSUMER,
+      '--last-event-id', 'evt-42',
+    ]);
+  });
+
   it('returns empty array when stdout is empty string', async () => {
     mockExecCommand.mockResolvedValue({ stdout: '', stderr: '' });
 
-    const result = await consumeMessages(INBOX, CONSUMER);
+    const result = await consumeMessages(INBOX, CONSUMER, '0');
     expect(result).toEqual([]);
   });
 
   it('returns empty array when stdout is []', async () => {
     mockExecCommand.mockResolvedValue({ stdout: '[]', stderr: '' });
 
-    const result = await consumeMessages(INBOX, CONSUMER);
+    const result = await consumeMessages(INBOX, CONSUMER, '0');
     expect(result).toEqual([]);
   });
 
   it('returns empty array when stdout is whitespace', async () => {
     mockExecCommand.mockResolvedValue({ stdout: '   \n', stderr: '' });
 
-    const result = await consumeMessages(INBOX, CONSUMER);
+    const result = await consumeMessages(INBOX, CONSUMER, '0');
     expect(result).toEqual([]);
   });
 
@@ -69,7 +82,7 @@ describe('consumeMessages', () => {
     };
     mockExecCommand.mockResolvedValue({ stdout: JSON.stringify([msg]), stderr: '' });
 
-    const result = await consumeMessages(INBOX, CONSUMER);
+    const result = await consumeMessages(INBOX, CONSUMER, '0');
     expect(result).toHaveLength(1);
     expect(result[0]).toEqual(msg);
   });
@@ -81,7 +94,7 @@ describe('consumeMessages', () => {
     ];
     mockExecCommand.mockResolvedValue({ stdout: JSON.stringify(msgs), stderr: '' });
 
-    const result = await consumeMessages(INBOX, CONSUMER);
+    const result = await consumeMessages(INBOX, CONSUMER, '0');
     expect(result).toHaveLength(2);
     expect(result[0]!.eventId).toBe('evt-1');
     expect(result[1]!.eventId).toBe('evt-2');

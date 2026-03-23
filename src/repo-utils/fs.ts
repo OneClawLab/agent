@@ -38,6 +38,10 @@ export function mkdirSync(p: string, opts?: nodeFs.MakeDirectoryOptions): string
   return nodeFs.mkdirSync(n(p), opts);
 }
 
+export function mkdtempSync(prefix: string): string {
+  return path.toPosixPath(nodeFs.mkdtempSync(n(prefix)));
+}
+
 export function readFileSync(p: string, encoding: BufferEncoding): string;
 export function readFileSync(p: string): Buffer;
 export function readFileSync(p: string, encoding?: BufferEncoding): string | Buffer {
@@ -68,6 +72,14 @@ export const constants = nodeFs.constants;
 
 export async function mkdir(p: string, opts?: nodeFs.MakeDirectoryOptions): Promise<string | undefined> {
   return nodeFsP.mkdir(n(p), opts);
+}
+
+export async function mkdtemp(prefix: string): Promise<string> {
+  return path.toPosixPath(await nodeFsP.mkdtemp(n(prefix)));
+}
+
+export async function rm(p: string, opts?: nodeFs.RmOptions): Promise<void> {
+  return nodeFsP.rm(n(p), opts);
 }
 
 export async function readFile(p: string, encoding: BufferEncoding): Promise<string>;

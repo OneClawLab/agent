@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import * as fs from '../../src/repo-utils/fs.js';
 import { tmpdir } from 'node:os';
 import { path } from '../../src/repo-utils/path.js';
 
@@ -85,11 +84,11 @@ function agentDir(id: string) {
 
 async function createAgent(id: string) {
   const dir = agentDir(id);
-  await mkdir(path.join(dir, 'logs'), { recursive: true });
-  await mkdir(path.join(dir, 'sessions'), { recursive: true });
-  await mkdir(path.join(dir, 'memory'), { recursive: true });
-  await writeFile(path.join(dir, 'IDENTITY.md'), `# ${id}\nYou are ${id}.\n`);
-  await writeFile(
+  await fs.mkdir(path.join(dir, 'logs'), { recursive: true });
+  await fs.mkdir(path.join(dir, 'sessions'), { recursive: true });
+  await fs.mkdir(path.join(dir, 'memory'), { recursive: true });
+  await fs.writeFile(path.join(dir, 'IDENTITY.md'), `# ${id}\nYou are ${id}.\n`);
+  await fs.writeFile(
     path.join(dir, 'config.yaml'),
     `agent_id: ${id}\nkind: user\npai:\n  provider: openai\n  model: gpt-4o\ninbox:\n  path: ${path.join(dir, 'inbox')}\nrouting:\n  default: per-peer\noutbound: []\nretry:\n  max_attempts: 3\n`
   );
@@ -115,7 +114,7 @@ function makeMessage(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(async () => {
-  tmpBase = path.resolve(await mkdtemp(path.join(path.resolve(tmpdir()), 'agent-run-test-')));
+  tmpBase = path.resolve(await fs.mkdtemp(path.join(path.toPosixPath(tmpdir()), 'agent-run-test-')));
   vi.clearAllMocks();
   // Restore default mock implementations after clearAllMocks
   mockExecCommand.mockResolvedValue({ stdout: '', stderr: '' });
@@ -130,7 +129,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await rm(tmpBase, { recursive: true, force: true });
+  await fs.rm(tmpBase, { recursive: true, force: true });
 });
 
 // ── Agent not found ───────────────────────────────────────────────────────────
@@ -156,7 +155,7 @@ describe('runCmd - agent not found', () => {
 describe('runCmd - file lock', () => {
   it('exits with code 1 when run.lock already exists', async () => {
     const dir = await createAgent('myagent');
-    await writeFile(path.join(dir, 'run.lock'), '9999');
+    await fs.writeFile(path.join(dir, 'run.lock'), '9999');
 
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
     const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
@@ -176,7 +175,7 @@ describe('runCmd - file lock', () => {
     let lockExistedDuringRun = false;
 
     mockConsumeMessages.mockImplementation(async () => {
-      lockExistedDuringRun = existsSync(path.join(dir, 'run.lock'));
+      lockExistedDuringRun = fs.existsSync(path.join(dir, 'run.lock'));
       return [];
     });
 
@@ -191,7 +190,7 @@ describe('runCmd - file lock', () => {
 
     await runCmd('myagent');
 
-    expect(existsSync(path.join(dir, 'run.lock'))).toBe(false);
+    expect(fs.existsSync(path.join(dir, 'run.lock'))).toBe(false);
   });
 
   it('removes run.lock even when an error occurs', async () => {
@@ -200,7 +199,7 @@ describe('runCmd - file lock', () => {
 
     await expect(runCmd('myagent')).rejects.toThrow('inbox error');
 
-    expect(existsSync(path.join(dir, 'run.lock'))).toBe(false);
+    expect(fs.existsSync(path.join(dir, 'run.lock'))).toBe(false);
   });
 });
 

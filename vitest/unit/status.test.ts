@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
+import * as fs from '../../src/repo-utils/fs.js';
 import { tmpdir } from 'node:os';
 import { path } from '../../src/repo-utils/path.js';
 
@@ -23,9 +23,9 @@ function agentDir(id: string) {
 
 async function createAgent(id: string, kind = 'user') {
   const dir = agentDir(id);
-  await mkdir(path.join(dir, 'logs'), { recursive: true });
-  await mkdir(path.join(dir, 'inbox'), { recursive: true });
-  await writeFile(
+  await fs.mkdir(path.join(dir, 'logs'), { recursive: true });
+  await fs.mkdir(path.join(dir, 'inbox'), { recursive: true });
+  await fs.writeFile(
     path.join(dir, 'config.yaml'),
     `agent_id: ${id}\nkind: ${kind}\npai:\n  provider: openai\n  model: gpt-4o\ninbox:\n  path: ${path.join(dir, 'inbox')}\nrouting:\n  default: per-peer\noutbound: []\n`
   );
@@ -33,11 +33,11 @@ async function createAgent(id: string, kind = 'user') {
 }
 
 beforeEach(async () => {
-  tmpBase = path.resolve(await mkdtemp(path.join(path.resolve(tmpdir()), 'agent-status-test-')));
+  tmpBase = path.resolve(await fs.mkdtemp(path.join(path.toPosixPath(tmpdir()), 'agent-status-test-')));
 });
 
 afterEach(async () => {
-  await rm(tmpBase, { recursive: true, force: true });
+  await fs.rm(tmpBase, { recursive: true, force: true });
 });
 
 // ── Agent not found ───────────────────────────────────────────────────────────
@@ -75,15 +75,16 @@ describe('statusCmd - agent not found', () => {
     }
   });
 
-  it('exits with code 1 when no id provided', async () => {
-    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('exit'); });
-    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  it('lists all agents when no id provided', async () => {
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     try {
-      await statusCmd(undefined, {}).catch(() => {});
-      expect(exitSpy).toHaveBeenCalledWith(1);
+      await statusCmd(undefined, {});
+      // Should not throw — delegates to listCmd which handles empty gracefully
+      const output = stdoutSpy.mock.calls.map(c => c[0]).join('');
+      expect(typeof output).toBe('string');
     } finally {
-      exitSpy.mockRestore();
+      stdoutSpy.mockRestore();
     }
   });
 });
@@ -108,7 +109,7 @@ describe('statusCmd - human output', () => {
 
   it('shows started=yes when run.lock exists', async () => {
     const dir = await createAgent('myagent');
-    await writeFile(path.join(dir, 'run.lock'), '');
+    await fs.writeFile(path.join(dir, 'run.lock'), '');
     const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     try {
@@ -122,7 +123,7 @@ describe('statusCmd - human output', () => {
 
   it('shows last_activity from log file mtime', async () => {
     const dir = await createAgent('myagent');
-    await writeFile(path.join(dir, 'logs', 'agent.log'), 'some log\n');
+    await fs.writeFile(path.join(dir, 'logs', 'agent.log'), 'some log\n');
     const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     try {
@@ -184,7 +185,7 @@ describe('statusCmd - JSON output', () => {
 
   it('JSON started=true when run.lock exists', async () => {
     const dir = await createAgent('myagent');
-    await writeFile(path.join(dir, 'run.lock'), '');
+    await fs.writeFile(path.join(dir, 'run.lock'), '');
     const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     try {

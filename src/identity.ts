@@ -1,12 +1,12 @@
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readFile } from './repo-utils/fs.js';
+import { path } from './repo-utils/path.js';
 
 /**
  * Load the IDENTITY.md content for an agent.
  * Throws if the file does not exist or cannot be read.
  */
 export async function loadIdentity(agentDir: string): Promise<string> {
-  const identityPath = join(agentDir, 'IDENTITY.md');
+  const identityPath = path.join(agentDir, 'IDENTITY.md');
   try {
     return await readFile(identityPath, 'utf8');
   } catch (err) {
@@ -47,14 +47,14 @@ export async function buildSystemPrompt(
 ): Promise<string> {
   const identity = await loadIdentity(agentDir);
 
-  const memoryDir = join(agentDir, 'memory');
+  const memoryDir = path.join(agentDir, 'memory');
 
-  const agentMemory = await readOptional(join(memoryDir, 'agent.md'));
+  const agentMemory = await readOptional(path.join(memoryDir, 'agent.md'));
   const userMemory = peerId
-    ? await readOptional(join(memoryDir, `user-${peerId}.md`))
+    ? await readOptional(path.join(memoryDir, `user-${peerId}.md`))
     : null;
   const threadMemory = threadId
-    ? await readOptional(join(memoryDir, `thread-${threadId}.md`))
+    ? await readOptional(path.join(memoryDir, `thread-${threadId}.md`))
     : null;
 
   const parts = [identity];

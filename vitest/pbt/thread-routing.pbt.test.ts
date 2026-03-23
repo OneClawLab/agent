@@ -2,7 +2,7 @@
 
 import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
-import { join } from 'node:path';
+import { path } from '../../src/repo-utils/path.js';
 import { resolveThreadPath } from '../../src/runner/router.js';
 
 // ── Arbitraries ──────────────────────────────────────────────────────────────
@@ -21,7 +21,7 @@ describe('Property 1: Thread 路径解析正确性', () => {
     fc.assert(
       fc.property(agentDirArb, segmentArb, segmentArb, (agentDir, channelId, peerId) => {
         const result = resolveThreadPath(agentDir, 'per-peer', channelId, peerId);
-        expect(result).toBe(join(agentDir, 'threads', 'peers', `${channelId}-${peerId}`));
+        expect(result).toBe(path.join(agentDir, 'threads', 'peers', `${channelId}-${peerId}`));
       }),
       { numRuns: 100 }
     );
@@ -31,7 +31,7 @@ describe('Property 1: Thread 路径解析正确性', () => {
     fc.assert(
       fc.property(agentDirArb, segmentArb, segmentArb, (agentDir, channelId, peerId) => {
         const result = resolveThreadPath(agentDir, 'per-channel', channelId, peerId);
-        expect(result).toBe(join(agentDir, 'threads', 'channels', channelId));
+        expect(result).toBe(path.join(agentDir, 'threads', 'channels', channelId));
       }),
       { numRuns: 100 }
     );
@@ -41,7 +41,7 @@ describe('Property 1: Thread 路径解析正确性', () => {
     fc.assert(
       fc.property(agentDirArb, segmentArb, segmentArb, (agentDir, channelId, peerId) => {
         const result = resolveThreadPath(agentDir, 'per-agent', channelId, peerId);
-        expect(result).toBe(join(agentDir, 'threads', 'main'));
+        expect(result).toBe(path.join(agentDir, 'threads', 'main'));
       }),
       { numRuns: 100 }
     );

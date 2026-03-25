@@ -1,7 +1,7 @@
 {
   "name": "@theclawlab/agent",
   "type": "module",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Agent runtime and lifecycle management for TheClaw platform.",
   "bin": {
     "agent": "dist/index.js"

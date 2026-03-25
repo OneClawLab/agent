@@ -17,6 +17,7 @@ import type { Logger } from '../repo-utils/logger.js';
 
 const RECENT_RAW_TOKEN_BUDGET = 4096;
 const COMPACT_INTERVAL_TURNS = 10;
+// 临时: 改成0.1调试方便，以后要改成 0.8
 const CONTEXT_USAGE_THRESHOLD = 0.8;
 const SAFETY_MARGIN = 512;
 
@@ -103,6 +104,9 @@ export async function compactSession(opts: CompactOptions): Promise<void> {
     return;
   }
 
+  const usagePct = Math.round((totalTokens / inputBudget) * 100);
+  const toK = (n: number): string => `${Math.round(n / 1000)}K`;
+  process.stderr.write(`  [compact] context ${toK(totalTokens)}/${toK(inputBudget)} tokens (${usagePct}%) — compacting…\n`);
   logger.info(`Compacting session for thread ${threadId} (tokens≈${totalTokens}, budget=${inputBudget}, turn=${state.turnCount})`);
 
   // Separate system messages and synthetic summary messages (injected by previous compactions).
@@ -162,6 +166,10 @@ export async function compactSession(opts: CompactOptions): Promise<void> {
 
   state.lastCompactedAt = state.turnCount;
   await saveCompactState(statePath, state);
+
+  const newTokens = estimateTotalTokens(systemPrompt, newMessages, userMessage);
+  const newPct = Math.round((newTokens / inputBudget) * 100);
+  process.stderr.write(`  [compact] done — context now ${toK(newTokens)}/${toK(inputBudget)} tokens (${newPct}%)\n`);
   logger.info(`Session compaction complete for thread ${threadId}`);
 }
 
@@ -240,12 +248,17 @@ ${transcript}
 
   logger.info(`Requesting summary for ${toSummarize.length} messages in thread ${threadId}${existingSummary ? ' (incremental)' : ''}`);
 
+  // Write userMessage to a temp file to avoid ENAMETOOLONG on large transcripts
+  const userMessageFile = path.join(sessionsDir, `compact-input-${threadId}.txt`);
+  await writeFile(userMessageFile, userMessage, 'utf8');
+
   const result = await invokeLlm({
     sessionFile: summarySessionFile,
     systemPromptFile,
     provider,
     model,
     userMessage,
+    userMessageFile,
   });
 
   return result.reply;

@@ -11,7 +11,12 @@ import type { PaiProgressEvent } from '../runner/llm.js';
 import { pushMessage, pushReply } from '../runner/recorder.js';
 import { execCommand } from '../repo-utils/os.js';
 import { withRetry } from '../errors.js';
+import { compactSession } from '../runner/compactor.js';
+import { estimateTokens, estimateMessageTokens, loadSessionMessages } from '../runner/session.js';
 import type { ReplyContext } from '../types.js';
+
+const DEFAULT_CONTEXT_WINDOW = 128_000;
+const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
 
 // Fixed identifiers for CLI chat sessions
 const CLI_CHANNEL = 'cli';
@@ -32,11 +37,11 @@ const LINE_MAX = 120;
 const MULTILINE_MAX_LINES = 3;
 
 /**
- * Truncate a string to maxLen, appending "…" if cut.
+ * Truncate a string to maxLen, appending "…(Nc)" if cut.
  */
 function truncate(s: string, maxLen: number): string {
   if (s.length <= maxLen) return s;
-  return s.slice(0, maxLen) + '…';
+  return s.slice(0, maxLen) + `…(${s.length - maxLen} chars)`;
 }
 
 /**
@@ -53,16 +58,21 @@ function renderInlineOrBlock(prefix: string, text: string, indent: string): stri
   const isMultiLine = nonEmptyLines.length > 1;
 
   if (!isMultiLine) {
-    // Single line — show inline, truncate tail
     const line = nonEmptyLines[0] ?? '';
-    return `${prefix} ${truncate(line, LINE_MAX)}\n`;
+    const truncated = line.length > LINE_MAX;
+    const display = truncated ? line.slice(0, LINE_MAX) + `…(${line.length - LINE_MAX} chars)` : line;
+    return `${prefix} ${display}\n`;
   }
 
-  // Multi-line — prefix on its own, then indented block
+  // Multi-line — prefix on its own line, body indented
   const shown = nonEmptyLines.slice(0, MULTILINE_MAX_LINES);
-  const hasMore = nonEmptyLines.length > MULTILINE_MAX_LINES;
-  const body = shown.map(l => `${indent}${truncate(l, LINE_MAX)}`).join('\n');
-  return `${prefix}\n${body}${hasMore ? `\n${indent}…` : ''}\n`;
+  const omitted = nonEmptyLines.length - MULTILINE_MAX_LINES;
+  const bodyLines = shown.map(l => {
+    const truncated = l.length > LINE_MAX;
+    return `${indent}${truncated ? l.slice(0, LINE_MAX) + `…(${l.length - LINE_MAX} chars)` : l}`;
+  });
+  const suffix = omitted > 0 ? `\n${indent}…(${omitted} lines)` : '';
+  return `${prefix}\n${bodyLines.join('\n')}${suffix}\n`;
 }
 
 /**
@@ -155,38 +165,55 @@ function renderToolResult(data: unknown): void {
   process.stderr.write(renderInlineOrBlock(prefix, content, `${INDENT}`));
 }
 
-/**
- * Handle a single pai progress event — write to stderr.
- */
-function handleProgressEvent(event: PaiProgressEvent): void {
-  switch (event.type) {
-    case 'start': {
-      process.stderr.write(`\n--- working...\n`);
-      break;
+interface CtxParams {
+  sessionFile: string;
+  systemPrompt: string;
+  contextWindow: number;
+  maxOutputTokens: number;
+  userMessage: string;
+}
+
+function makeProgressHandler(ctx: CtxParams): { onProgress: (event: PaiProgressEvent) => void; printCtx: () => void } {
+  const inputBudget = ctx.contextWindow - ctx.maxOutputTokens - 512;
+  const toK = (n: number): string => `${Math.round(n / 1000)}K`;
+
+  const printCtx = async (): Promise<void> => {
+    try {
+      const msgs = await loadSessionMessages(ctx.sessionFile);
+      const total = estimateTokens(ctx.systemPrompt) +
+        msgs.reduce((s, m) => s + estimateMessageTokens(m), 0) +
+        estimateTokens(ctx.userMessage) + 4;
+      const pct = Math.round((total / inputBudget) * 100);
+      process.stderr.write(`\n\nctx: ${pct}% (${toK(total)}/${toK(inputBudget)})\n`);
+    } catch {
+      // session may not exist yet
     }
-    case 'tool_call':
-      renderToolCall(event.data);
-      break;
-    case 'tool_result':
-      renderToolResult(event.data);
-      break;
-    case 'complete': {
-      const d = event.data as Record<string, unknown> | null ?? {};
-      const usage = d['usage'] as Record<string, unknown> | undefined;
-      if (usage) {
-        process.stderr.write(`  done  in=${usage['input']} out=${usage['output']} tokens\n`);
+  };
+
+  const onProgress = (event: PaiProgressEvent): void => {
+    switch (event.type) {
+      case 'start':
+        process.stderr.write(`\n--- working...\n`);
+        break;
+      case 'tool_call':
+        renderToolCall(event.data);
+        break;
+      case 'tool_result':
+        renderToolResult(event.data);
+        break;
+      case 'complete':
+        break;
+      case 'error': {
+        const msg = typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
+        process.stderr.write(`  error: ${msg}\n`);
+        break;
       }
-      break;
+      default:
+        break;
     }
-    case 'error': {
-      const msg = typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
-      process.stderr.write(`  error: ${msg}\n`);
-      break;
-    }
-    default:
-      // chunk and others — skip
-      break;
-  }
+  };
+
+  return { onProgress, printCtx };
 }
 
 // ─── Chat command ─────────────────────────────────────────────────────────────
@@ -220,6 +247,8 @@ export async function chatCmd(id: string): Promise<void> {
   const config = await loadConfig(dir);
   const { provider, model } = config.pai;
   const maxRetries = config.retry?.max_attempts ?? 3;
+  const contextWindow = config.context_window ?? DEFAULT_CONTEXT_WINDOW;
+  const maxOutputTokens = config.max_output_tokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
 
   // Ensure the cli-cli thread exists (reuse across sessions)
   const { threadPath } = await routeMessage(dir, 'per-peer', CLI_CHANNEL, CLI_PEER);
@@ -253,20 +282,15 @@ export async function chatCmd(id: string): Promise<void> {
     prompt: 'Q: ',
   });
 
-  const prompt = (): void => {
-    if (process.stdin.isTTY) {
-      rl.prompt();
-    }
-  };
+  let processing = false;
 
   const handleLine = async (line: string): Promise<void> => {
     const text = line.trim();
-    if (!text) {
-      prompt();
+    if (!text || processing) {
       return;
     }
 
-    rl.pause();
+    processing = true;
 
     try {
       // Push user message to thread
@@ -279,6 +303,20 @@ export async function chatCmd(id: string): Promise<void> {
       await writeFile(systemPromptFile, systemPrompt, 'utf8');
 
       const sessionFile = buildSessionFilePath(dir, threadId);
+
+      // Compact session if context is too large
+      await compactSession({
+        agentDir: dir,
+        threadId,
+        sessionFile,
+        systemPrompt,
+        userMessage: text,
+        provider,
+        model,
+        contextWindow,
+        maxOutputTokens,
+        logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {}, close: async () => {} },
+      });
 
       // ── Progress section (stderr) ──────────────────────────────────────
       // (header printed by 'start' progress event as "--- working...")
@@ -293,6 +331,8 @@ export async function chatCmd(id: string): Promise<void> {
         process.stdout.write(chunk);
       };
 
+      const { onProgress, printCtx } = makeProgressHandler({ sessionFile, systemPrompt, contextWindow, maxOutputTokens, userMessage: text });
+
       const result = await withRetry(
         () => invokeLlm({
           sessionFile,
@@ -300,7 +340,7 @@ export async function chatCmd(id: string): Promise<void> {
           provider,
           model,
           userMessage: text,
-          onProgress: handleProgressEvent,
+          onProgress,
           onChunk,
         }),
         maxRetries,
@@ -323,6 +363,9 @@ export async function chatCmd(id: string): Promise<void> {
       // Push reply to thread
       await pushReply(threadPath, result.reply, replyContext);
 
+      // Print ctx after session file is fully written
+      await printCtx();
+
       // Ensure trailing newlines after streamed reply (onChunk already wrote the content)
       if (replyHeaderPrinted) {
         process.stdout.write(`\n\n`);
@@ -334,8 +377,8 @@ export async function chatCmd(id: string): Promise<void> {
       process.stderr.write(`\nError: ${(err as Error).message}\n\n`);
     }
 
-    rl.resume();
-    prompt();
+    processing = false;
+    rl.prompt();
   };
 
   rl.on('line', (line) => {
@@ -347,5 +390,5 @@ export async function chatCmd(id: string): Promise<void> {
     process.exit(0);
   });
 
-  prompt();
+  rl.prompt();
 }

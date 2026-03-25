@@ -185,10 +185,15 @@ export async function runCmd(id: string): Promise<void> {
 
         // Requirement 6.2, 4.5: invoke LLM with retry for recoverable errors
         logger.info(`Invoking LLM for thread ${threadId}`);
+
+        // Write user message to file to avoid ENAMETOOLONG for large messages
+        const userMessageFile = path.join(dir, 'sessions', `user-input-${threadId}.txt`);
+        await writeFile(userMessageFile, content.text, 'utf8');
+
         let llmResult;
         try {
           llmResult = await withRetry(
-            () => invokeLlm({ sessionFile, systemPromptFile, provider, model, userMessage: content.text }),
+            () => invokeLlm({ sessionFile, systemPromptFile, provider, model, userMessage: content.text, userMessageFile }),
             maxRetries,
             (err) => {
               const msg = err.message.toLowerCase();

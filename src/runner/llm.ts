@@ -8,6 +8,8 @@ export interface LlmInvokeParams {
   provider: string;
   model: string;
   userMessage: string;
+  /** If set, pass message via --input-file instead of CLI arg (avoids ENAMETOOLONG). */
+  userMessageFile?: string;
   onProgress?: (event: PaiProgressEvent) => void;
   /** Called with each stdout chunk as it arrives (streaming tokens). */
   onChunk?: (chunk: string) => void;
@@ -44,7 +46,7 @@ export function buildSessionFilePath(agentDir: string, threadId: string): string
  * onProgress is called for each parsed stderr event in real time.
  */
 export async function invokeLlm(params: LlmInvokeParams): Promise<LlmResult> {
-  const { sessionFile, systemPromptFile, provider, model, userMessage, onProgress, onChunk } = params;
+  const { sessionFile, systemPromptFile, provider, model, userMessage, userMessageFile, onProgress, onChunk } = params;
 
   const paiArgs = [
     'chat',
@@ -54,7 +56,9 @@ export async function invokeLlm(params: LlmInvokeParams): Promise<LlmResult> {
     '--system-file', systemPromptFile,
     '--provider', provider,
     '--model', model,
-    userMessage,
+    ...(userMessageFile
+      ? ['--input-file', userMessageFile]
+      : [userMessage]),
   ];
 
   const spawnCmd = IS_WIN32 ? 'sh' : 'pai';

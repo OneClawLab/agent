@@ -44,7 +44,7 @@ export async function invokeLlm(params: LlmInvokeParams): Promise<LlmResult> {
     userMessage,
   ];
 
-  const { stdout } = await execCommand('pai', args, 120_000, 10);
+  const { stdout } = await execCommand('pai', args, 3600_000, 10);
 
   const text = stdout.trim();
 

@@ -49,7 +49,7 @@ describe('invokeLlm', () => {
         '--model', BASE_PARAMS.model,
         BASE_PARAMS.userMessage,
       ],
-      120_000,
+      3_600_000,
       10
     );
   });

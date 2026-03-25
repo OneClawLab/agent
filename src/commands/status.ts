@@ -19,6 +19,7 @@ export interface AgentStatus {
   kind: string;
   dir: string;
   model: string;
+  context_window: number | null;
   inbox_path: string;
   inbox_pending: number;
   started: boolean;
@@ -92,6 +93,7 @@ export async function statusCmd(id: string | undefined, opts: { json?: boolean }
     kind: config.kind,
     dir,
     model: `${config.pai.provider}/${config.pai.model}`,
+    context_window: config.context_window ?? null,
     inbox_path: inboxPath,
     inbox_pending,
     started,
@@ -101,14 +103,15 @@ export async function statusCmd(id: string | undefined, opts: { json?: boolean }
   if (opts.json) {
     process.stdout.write(JSON.stringify(statusInfo, null, 2) + '\n');
   } else {
-    process.stdout.write(`Agent:         ${statusInfo.agent_id}\n`);
-    process.stdout.write(`Kind:          ${statusInfo.kind}\n`);
-    process.stdout.write(`Dir:           ${statusInfo.dir}\n`);
-    process.stdout.write(`Model:         ${statusInfo.model}\n`);
-    process.stdout.write(`Inbox:         ${statusInfo.inbox_path}\n`);
-    process.stdout.write(`Inbox pending: ${statusInfo.inbox_pending}\n`);
-    process.stdout.write(`Started:       ${statusInfo.started ? 'yes' : 'no'}\n`);
-    process.stdout.write(`Last activity: ${statusInfo.last_activity ?? 'none'}\n`);
+    process.stdout.write(`Agent:          ${statusInfo.agent_id}\n`);
+    process.stdout.write(`Kind:           ${statusInfo.kind}\n`);
+    process.stdout.write(`Dir:            ${statusInfo.dir}\n`);
+    process.stdout.write(`Model:          ${statusInfo.model}\n`);
+    process.stdout.write(`Context window: ${statusInfo.context_window ?? '(default 128000)'}\n`);
+    process.stdout.write(`Inbox:          ${statusInfo.inbox_path}\n`);
+    process.stdout.write(`Inbox pending:  ${statusInfo.inbox_pending}\n`);
+    process.stdout.write(`Started:        ${statusInfo.started ? 'yes' : 'no'}\n`);
+    process.stdout.write(`Last activity:  ${statusInfo.last_activity ?? 'none'}\n`);
   }
 }
 

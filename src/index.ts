@@ -43,6 +43,7 @@ program
   .command('init <id>')
   .description('Initialize a new agent')
   .option('--kind <kind>', 'system | user', 'user')
+  .option('--provider <name>', 'pai provider name (auto-resolved from pai config if omitted)')
   .action(wrapAction(initCmd));
 
 program

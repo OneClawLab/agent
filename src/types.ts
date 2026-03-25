@@ -40,4 +40,8 @@ export interface AgentConfig {
   outbound: Array<{ thread_pattern: string; via: string }>;
   retry?: { max_attempts?: number };
   deliver?: { max_attempts?: number };
+  /** Model context window in tokens. Default: 128000. */
+  context_window?: number;
+  /** Max output tokens reserved for model response. Default: 4096. */
+  max_output_tokens?: number;
 }

@@ -7,6 +7,7 @@ import { loadConfig } from '../config.js';
 import { buildSystemPrompt } from '../identity.js';
 import { routeMessage } from '../runner/router.js';
 import { invokeLlm, buildSessionFilePath } from '../runner/llm.js';
+import type { PaiProgressEvent } from '../runner/llm.js';
 import { pushMessage, pushReply } from '../runner/recorder.js';
 import { execCommand } from '../repo-utils/os.js';
 import { withRetry } from '../errors.js';
@@ -17,9 +18,178 @@ const CLI_CHANNEL = 'cli';
 const CLI_PEER = 'cli';
 const CLI_SOURCE = 'internal:cli';
 
+// Section separator printed to stderr before progress output
+// (removed — replaced by inline "--- working..." header)
+
 function agentDir(id: string): string {
   return path.join(path.toPosixPath(homedir()), '.theclaw', 'agents', id);
 }
+
+// ─── Progress rendering ───────────────────────────────────────────────────────
+
+const INDENT = '    ';
+const LINE_MAX = 120;
+const MULTILINE_MAX_LINES = 3;
+
+/**
+ * Truncate a string to maxLen, appending "…" if cut.
+ */
+function truncate(s: string, maxLen: number): string {
+  if (s.length <= maxLen) return s;
+  return s.slice(0, maxLen) + '…';
+}
+
+/**
+ * Render a value (command text or result text) as either:
+ *   - single line: prefix + truncated text on same line
+ *   - multi-line:  prefix on its own line, then indented lines (max 3) + "…" if more
+ *
+ * @param prefix   e.g. "command:" or "✓" or "✗"
+ * @param text     the content to display
+ * @param indent   indentation string for multi-line body
+ */
+function renderInlineOrBlock(prefix: string, text: string, indent: string): string {
+  const nonEmptyLines = text.split('\n').map(l => l.trimEnd()).filter(l => l.length > 0);
+  const isMultiLine = nonEmptyLines.length > 1;
+
+  if (!isMultiLine) {
+    // Single line — show inline, truncate tail
+    const line = nonEmptyLines[0] ?? '';
+    return `${prefix} ${truncate(line, LINE_MAX)}\n`;
+  }
+
+  // Multi-line — prefix on its own, then indented block
+  const shown = nonEmptyLines.slice(0, MULTILINE_MAX_LINES);
+  const hasMore = nonEmptyLines.length > MULTILINE_MAX_LINES;
+  const body = shown.map(l => `${indent}${truncate(l, LINE_MAX)}`).join('\n');
+  return `${prefix}\n${body}${hasMore ? `\n${indent}…` : ''}\n`;
+}
+
+/**
+ * Render a bash_exec tool_call event to stderr in a human-friendly format.
+ *
+ * Output format (single-line command):
+ *   ▶ <comment>
+ *     command: <cmd>  cwd: <cwd>  timeout: <t>s
+ *
+ * Output format (multi-line command):
+ *   ▶ <comment>
+ *     command:
+ *       line1
+ *       line2
+ *       line3
+ *       …
+ *     cwd: <cwd>  timeout: <t>s
+ */
+function renderToolCall(data: unknown): void {
+  if (typeof data !== 'object' || data === null) {
+    process.stderr.write(`  tool_call: ${JSON.stringify(data)}\n`);
+    return;
+  }
+
+  const d = data as Record<string, unknown>;
+  const name = typeof d['name'] === 'string' ? d['name'] : 'unknown';
+
+  if (name !== 'bash_exec') {
+    process.stderr.write(`  tool_call: ${name}(${JSON.stringify(d['arguments'] ?? {})})\n`);
+    return;
+  }
+
+  const args = (typeof d['arguments'] === 'object' && d['arguments'] !== null)
+    ? d['arguments'] as Record<string, unknown>
+    : {};
+
+  const comment = typeof args['comment'] === 'string' ? args['comment'].trim() : '';
+  const command = typeof args['command'] === 'string' ? args['command'].trim() : '';
+  const cwd = typeof args['cwd'] === 'string' ? args['cwd'] : '';
+  const timeout = args['timeout_seconds'] !== undefined ? String(args['timeout_seconds']) : '';
+
+  // Line 1: human-readable comment
+  process.stderr.write(`  ▶ ${comment || 'bash_exec'}\n`);
+
+  // Command block
+  if (command) {
+    process.stderr.write(renderInlineOrBlock(`${INDENT}command:`, command, `${INDENT}  `));
+  }
+
+  // cwd / timeout on a separate line
+  const meta: string[] = [];
+  if (cwd) meta.push(`cwd: ${cwd}`);
+  if (timeout) meta.push(`timeout: ${timeout}s`);
+  if (meta.length > 0) {
+    process.stderr.write(`${INDENT}${meta.join('  ')}\n`);
+  }
+}
+
+/**
+ * Render a tool_result event to stderr.
+ *
+ * Success (exitCode === 0):  ✓ <output>
+ * Failure (exitCode !== 0):  ✗ <output>
+ *
+ * Output follows the same single/multi-line rules as renderInlineOrBlock.
+ */
+function renderToolResult(data: unknown): void {
+  if (typeof data !== 'object' || data === null) {
+    process.stderr.write(`  ✓ ${truncate(JSON.stringify(data), LINE_MAX)}\n`);
+    return;
+  }
+
+  const d = data as Record<string, unknown>;
+  const exitCode = d['exitCode'] !== undefined ? d['exitCode'] : d['exit_code'];
+  const stdout = typeof d['stdout'] === 'string' ? d['stdout'] : '';
+  const stderr = typeof d['stderr'] === 'string' ? d['stderr'] : '';
+  const errMsg = typeof d['error'] === 'string' ? d['error'] : '';
+
+  const isSuccess = exitCode === 0 || exitCode === undefined;
+  const icon = isSuccess ? '✓' : '✗';
+  const prefix = `  ${icon}`;
+
+  const content = errMsg || [stdout, stderr].filter(s => s.trim()).join('\n').trim();
+
+  if (!content) {
+    process.stderr.write(`${prefix} (no output)\n`);
+    return;
+  }
+
+  process.stderr.write(renderInlineOrBlock(prefix, content, `${INDENT}`));
+}
+
+/**
+ * Handle a single pai progress event — write to stderr.
+ */
+function handleProgressEvent(event: PaiProgressEvent): void {
+  switch (event.type) {
+    case 'start': {
+      process.stderr.write(`\n--- working...\n`);
+      break;
+    }
+    case 'tool_call':
+      renderToolCall(event.data);
+      break;
+    case 'tool_result':
+      renderToolResult(event.data);
+      break;
+    case 'complete': {
+      const d = event.data as Record<string, unknown> | null ?? {};
+      const usage = d['usage'] as Record<string, unknown> | undefined;
+      if (usage) {
+        process.stderr.write(`  done  in=${usage['input']} out=${usage['output']} tokens\n`);
+      }
+      break;
+    }
+    case 'error': {
+      const msg = typeof event.data === 'string' ? event.data : JSON.stringify(event.data);
+      process.stderr.write(`  error: ${msg}\n`);
+      break;
+    }
+    default:
+      // chunk and others — skip
+      break;
+  }
+}
+
+// ─── Chat command ─────────────────────────────────────────────────────────────
 
 /**
  * agent chat <id>
@@ -29,9 +199,10 @@ function agentDir(id: string): string {
  *   1. Read user input from stdin
  *   2. Route to a fixed cli-cli thread (per-peer routing with channel=cli, peer=cli)
  *   3. Push user message to thread
- *   4. Invoke LLM (pai chat) synchronously
+ *   4. Invoke LLM via `pai chat --stream --json` (streaming)
+ *      - stderr section: progress events (tool calls, results, token usage)
+ *      - stdout section: final reply text
  *   5. Push reply to thread
- *   6. Print reply to stdout
  *
  * The session persists across invocations (same thread + session file).
  * Use Ctrl+C or Ctrl+D to exit.
@@ -54,9 +225,6 @@ export async function chatCmd(id: string): Promise<void> {
   const { threadPath } = await routeMessage(dir, 'per-peer', CLI_CHANNEL, CLI_PEER);
   const threadId = path.basename(threadPath);
 
-  // Register a no-op consumer on the thread if not already present,
-  // so thread pop works. We use 'chat' as the consumer name.
-  // thread subscribe is idempotent-ish — ignore error if already exists.
   try {
     await execCommand('thread', [
       'subscribe',
@@ -82,11 +250,12 @@ export async function chatCmd(id: string): Promise<void> {
     input: process.stdin,
     output: process.stdout,
     terminal: process.stdin.isTTY,
+    prompt: 'Q: ',
   });
 
-  const prompt = () => {
+  const prompt = (): void => {
     if (process.stdin.isTTY) {
-      process.stdout.write('> ');
+      rl.prompt();
     }
   };
 
@@ -111,9 +280,29 @@ export async function chatCmd(id: string): Promise<void> {
 
       const sessionFile = buildSessionFilePath(dir, threadId);
 
-      // Invoke LLM synchronously
+      // ── Progress section (stderr) ──────────────────────────────────────
+      // (header printed by 'start' progress event as "--- working...")
+
+      // Print "A:" header before first streaming chunk arrives
+      let replyHeaderPrinted = false;
+      const onChunk = (chunk: string): void => {
+        if (!replyHeaderPrinted) {
+          process.stdout.write(`\nA:\n`);
+          replyHeaderPrinted = true;
+        }
+        process.stdout.write(chunk);
+      };
+
       const result = await withRetry(
-        () => invokeLlm({ sessionFile, systemPromptFile, provider, model, userMessage: text }),
+        () => invokeLlm({
+          sessionFile,
+          systemPromptFile,
+          provider,
+          model,
+          userMessage: text,
+          onProgress: handleProgressEvent,
+          onChunk,
+        }),
         maxRetries,
         (err) => {
           const msg = err.message.toLowerCase();
@@ -129,13 +318,20 @@ export async function chatCmd(id: string): Promise<void> {
         }
       );
 
+      process.stderr.write(`\n`);
+
       // Push reply to thread
       await pushReply(threadPath, result.reply, replyContext);
 
-      // Print reply
-      process.stdout.write(`\n${result.reply}\n\n`);
+      // Ensure trailing newlines after streamed reply (onChunk already wrote the content)
+      if (replyHeaderPrinted) {
+        process.stdout.write(`\n\n`);
+      } else {
+        // Fallback: no chunks received, print full reply at once
+        process.stdout.write(`\nA:\n${result.reply}\n\n`);
+      }
     } catch (err) {
-      process.stderr.write(`Error: ${(err as Error).message}\n\n`);
+      process.stderr.write(`\nError: ${(err as Error).message}\n\n`);
     }
 
     rl.resume();

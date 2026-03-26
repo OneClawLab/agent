@@ -1,4 +1,16 @@
-# agent
+# agent (DEPRECATED)
+
+> **⚠️ 本 repo 已废弃，功能由 [xar](../xar) 完全替代。**
+>
+> xar 是 TheClaw v2 架构的 agent runtime daemon，采用常驻进程 + IPC streaming 模式，替代了本 repo 基于 notifier 文件轮询 + CLI 进程调用的架构。
+>
+> - 迁移指南：`agent init/start/stop/status/list` → `xar init/start/stop/status/list`
+> - `agent run` / `agent deliver` 已内化为 xar daemon 的 run-loop 和 IPC 投递
+> - `agent chat` / `agent send` → `xar chat` / `xar send`
+>
+> 本 repo 保留作为设计参考文档，不再接受新功能开发。
+
+---
 
 A CLI tool for managing autonomous AI agents in TheClaw — each agent has an inbox thread, an LLM identity, and a routing table that maps incoming messages to conversation threads.
 
